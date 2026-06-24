@@ -6,6 +6,8 @@ from langchain_chroma import Chroma
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 
+from schemas import RouteDecision
+
 load_dotenv()
 
 #Shared Objects
@@ -79,41 +81,35 @@ def router_node(state):
     prompt = f"""
 You are a routing agent.
 
-Decide whether the user needs:
+Choose one route:
 
 direct
 - greetings
 - casual conversation
 
 retrieve
-- questions requiring knowledge lookup
+- knowledge questions
 - questions about LangGraph
 - questions about FastAPI
 - questions about RAG
-
-Return ONLY one word:
-
-direct
-or
-
-retrieve
 
 Question:
 {question}
 """
 
-    response = llm.invoke(prompt)
+    structured_llm = llm.with_structured_output(
+        RouteDecision
+    )
 
-    route = response.content.strip().lower()
+    result = structured_llm.invoke(prompt)
 
     print("\n===== ROUTER NODE =====")
     print("Question:", question)
-    print("Route:", route)
+    print("Route:", result.route)
 
     return {
-        "route": route
+        "route": result.route
     }
-
 #   Route Selector   
 def choose_route(state):
 
