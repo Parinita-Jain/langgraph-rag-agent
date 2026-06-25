@@ -1,49 +1,72 @@
 # LangGraph RAG Agent
 
-A simple Agentic AI application built using:
-
-- LangGraph
-- ChromaDB
-- HuggingFace Embeddings
-- Google Gemini
-- LangChain
+A conversational Agentic AI application built with LangGraph, Gemini, ChromaDB, and HuggingFace Embeddings.
 
 ## Features
 
-- PDF document ingestion
-- Semantic search using ChromaDB
+- PDF ingestion
+- ChromaDB vector store
+- Semantic retrieval
 - Retrieval-Augmented Generation (RAG)
+- LangGraph workflow
 - LLM-based routing
-- Conditional execution paths using LangGraph
+- Structured output using Pydantic
+- Message-based conversation state
+- Conditional graph execution
+
+## Directory Structure
+
+langgraph-rag-agent/
+│
+├── data/
+│   ├── fastapi.pdf
+│   ├── langgraph.pdf
+│   └── rag.pdf
+│
+├── app.py
+├── graph.py
+├── nodes.py
+├── state.py
+├── schemas.py
+├── ingest.py
+│
+├── requirements.txt
+├── README.md
+├── .gitignore
+└── LICENSE (optional)
 
 ## Architecture
 
-User Question
-↓
-Agent Node
-↓
-Router Node (Gemini)
-├── Direct Response
-└── Retrieval
-↓
-Generate Answer
-↓
-Final Response
+START
+ ↓
+Agent
+ ↓
+Gemini Router (Structured Output)
+ ├── Direct Reply
+ └── Retrieve
+        ↓
+     ChromaDB
+        ↓
+     Gemini
+        ↓
+      AIMessage
+        ↓
+END
 
-## Setup
+## Tech Stack
 
-Install dependencies:
+- Python
+- LangGraph
+- LangChain
+- Google Gemini
+- ChromaDB
+- HuggingFace Embeddings
+- Pydantic
 
+## Run
+
+```bash
 pip install -r requirements.txt
-
-Create .env
-
-GOOGLE_API_KEY=your_api_key
-
-Build vector database:
-
 python ingest.py
-
-Run:
-
 python app.py
+```
