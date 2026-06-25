@@ -1,15 +1,36 @@
 from graph import app
 
-question = input("Ask a question: ")
+from langchain_core.messages import HumanMessage
 
-result = app.invoke(
-    {
-        "question": question
-    }
-)
+conversation = []
 
-print("\n" + "=" * 50)
-print("FINAL STATE")
-print("=" * 50)
+print("Type 'exit' to quit.\n")
 
-print(result)
+while True:
+
+    question = input("You: ")
+
+    if question.lower() == "exit":
+        break
+
+    # Add user's message
+    conversation.append(
+        HumanMessage(content=question)
+    )
+
+    # Run graph
+    result = app.invoke(
+        {
+            "messages": conversation
+        }
+    )
+
+    # Save updated conversation
+    conversation = result["messages"]
+
+    # Print latest AI reply
+    print("\nAssistant:")
+
+    print(conversation[-1].content)
+
+    print("-" * 50)

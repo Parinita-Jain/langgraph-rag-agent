@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 import os
 
+from langchain_core.messages import AIMessage
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 
@@ -40,7 +41,9 @@ def agent_node(state):
 
 def retrieve_node(state):
     print("\n ========= Retrieve Node =======")
-    question = state["question"]
+    messages = state["messages"]
+
+    question = messages[-1].content
 
     docs = vectorstore.similarity_search(question,k=7)
 
@@ -51,8 +54,11 @@ def retrieve_node(state):
 def generate_node(state):
     print("\n ======= generate node =====")
 
-    question=state["question"]
-    docs=state["documents"]
+    messages = state["messages"]
+
+    question = messages[-1].content
+
+    docs = state["documents"]
 
     context="\n\n".join(doc.page_content for doc in docs)
 
@@ -71,12 +77,16 @@ def generate_node(state):
     response = llm.invoke(prompt)
 
     return {
-        "answer": response.content
-    }
+    "messages": [
+        AIMessage(content=response.content)
+    ]
+}
 
 def router_node(state):
 
-    question = state["question"]
+    messages = state["messages"]
+
+    question = messages[-1].content
 
     prompt = f"""
 You are a routing agent.
@@ -121,6 +131,10 @@ def choose_route(state):
 def direct_node(state):
 
     return {
-        "answer": "Hello! How can I help you today?"
+        "messages": [
+            AIMessage(
+                content="Hello! How can I help you today?"
+            )
+        ]
     }
 
