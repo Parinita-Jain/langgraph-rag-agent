@@ -15,4 +15,6 @@ class AgentState(TypedDict):
 
     route: str
 
+    rewritten_question: str
+
     documents: list

@@ -39,13 +39,52 @@ def agent_node(state):
 
     return {}
 
+def build_conversation(messages):
+
+    conversation = ""
+
+    for message in messages:
+
+        if isinstance(message, HumanMessage):
+            conversation += f"Human: {message.content}\n\n"
+
+        elif isinstance(message, AIMessage):
+            conversation += f"AI: {message.content}\n\n"
+
+    return conversation
+
+# rewriting query
+
+def rewrite_node(state):
+    print("\n ======= rewrite node =====")
+    conversation = build_conversation(state["messages"])
+
+    prompt = f"""
+You are a query rewriting assistant.
+
+Your job is to rewrite ONLY the user's latest question into a standalone question.
+
+Conversation:
+{conversation}
+
+Standalone Question:
+"""
+
+    response = llm.invoke(prompt)
+
+    print("Rewritten Question:", response.content)
+
+    return {
+        "rewritten_question": response.content
+    }
+
 #retrieve node
 
 def retrieve_node(state):
     print("\n ========= Retrieve Node =======")
     messages = state["messages"]
 
-    question = messages[-1].content
+    question = state["rewritten_question"]
 
     docs = vectorstore.similarity_search(question,k=7)
 
@@ -58,15 +97,7 @@ def generate_node(state):
 
     messages = state["messages"]
 
-    conversation = ""
-
-    for message in messages:
-
-        if isinstance(message, HumanMessage):
-            conversation += f"Human: {message.content}\n\n"
-
-        elif isinstance(message, AIMessage):
-            conversation += f"AI: {message.content}\n\n"
+    conversation = build_conversation(state["messages"]) 
 
     question = messages[-1].content
 
