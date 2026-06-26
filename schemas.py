@@ -3,4 +3,4 @@ from pydantic import BaseModel
 
 
 class RouteDecision(BaseModel):
-    route: Literal["direct", "retrieve"]
+    route: Literal["direct", "retrieve", "calculator"]

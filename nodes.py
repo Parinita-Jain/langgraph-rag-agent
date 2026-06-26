@@ -11,6 +11,8 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 
 from schemas import RouteDecision
 
+import re
+
 load_dotenv()
 
 #Shared Objects
@@ -62,7 +64,17 @@ def rewrite_node(state):
     prompt = f"""
 You are a query rewriting assistant.
 
-Your job is to rewrite ONLY the user's latest question into a standalone question.
+Rewrite ONLY the user's latest question into a standalone question.
+
+Do NOT answer the question.
+
+Do NOT change the user's intent.
+
+Do NOT infer a different meaning.
+
+Keep abbreviations like RAG, FastAPI, LangGraph exactly as written.
+
+Return only the rewritten question.
 
 Conversation:
 {conversation}
@@ -82,7 +94,6 @@ Standalone Question:
 
 def retrieve_node(state):
     print("\n ========= Retrieve Node =======")
-    messages = state["messages"]
 
     question = state["rewritten_question"]
 
@@ -98,8 +109,6 @@ def generate_node(state):
     messages = state["messages"]
 
     conversation = build_conversation(state["messages"]) 
-
-    question = messages[-1].content
 
     docs = state["documents"]
 
@@ -126,41 +135,77 @@ def generate_node(state):
         AIMessage(content=response.content)
     ]
 }
-
 def router_node(state):
 
-    messages = state["messages"]
+    question = state["messages"][-1].content
+    question_lower = question.lower().strip()
 
-    question = messages[-1].content
+    print("\n===== ROUTER NODE =====")
+    print("Question:", question)
+
+    # -------------------------
+    # Rule 1 : Greetings
+    # -------------------------
+
+    greetings = [
+        "hi",
+        "hello",
+        "hey",
+        "good morning",
+        "good afternoon",
+        "good evening"
+    ]
+
+    if question_lower in greetings:
+
+        print("Route: direct (Python Rule)")
+
+        return {
+            "route": "direct"
+        }
+
+    # -------------------------
+    # Rule 2 : Calculator
+    # -------------------------
+
+    calculator_pattern = r"^[0-9+\-*/().%\s]+$"
+
+    if re.fullmatch(calculator_pattern, question):
+
+        print("Route: calculator (Python Rule)")
+
+        return {
+            "route": "calculator"
+        }
+
+    # -------------------------
+    # Rule 3 : Ask Gemini
+    # -------------------------
 
     prompt = f"""
 You are a routing agent.
 
-Choose one route:
+Choose exactly ONE route.
 
 direct
 - greetings
 - casual conversation
 
 retrieve
-- knowledge questions
 - questions about LangGraph
-- questions about FastAPI
-- questions about RAG
+- FastAPI
+- RAG
+- document knowledge
 
 Question:
 {question}
 """
 
-    structured_llm = llm.with_structured_output(
-        RouteDecision
-    )
+    structured_llm = llm.with_structured_output(RouteDecision)
 
     result = structured_llm.invoke(prompt)
 
-    print("\n===== ROUTER NODE =====")
-    print("Question:", question)
-    print("Route:", result.route)
+    print("Route:", result.route, "(Gemini)")
 
     return {
         "route": result.route
@@ -183,3 +228,27 @@ def direct_node(state):
         ]
     }
 
+def calculator_node(state):
+
+    print("\n===== CALCULATOR NODE =====")
+
+    question = state["messages"][-1].content
+
+    try:
+        result = eval(question)
+
+        return {
+            "messages": [
+                AIMessage(content=str(result))
+            ]
+        }
+
+    except Exception:
+
+        return {
+            "messages": [
+                AIMessage(
+                    content="Sorry, I couldn't calculate that expression."
+                )
+            ]
+        }

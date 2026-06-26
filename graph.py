@@ -9,7 +9,8 @@ from nodes import (
     direct_node,
     retrieve_node,
     generate_node,
-    rewrite_node
+    rewrite_node,
+    calculator_node
 )
 
 # Create Graph
@@ -28,6 +29,8 @@ workflow.add_node("rewrite", rewrite_node)
 
 workflow.add_node("generate", generate_node)
 
+workflow.add_node("calculator", calculator_node)
+
 # Start Flow
 workflow.add_edge(START, "agent")
 
@@ -40,7 +43,8 @@ workflow.add_conditional_edges(
     choose_route,
     {
         "direct": "direct",
-        "retrieve": "rewrite"
+        "retrieve": "rewrite",
+        "calculator": "calculator"
     }
 )
 
@@ -52,6 +56,8 @@ workflow.add_edge("retrieve", "generate")
 
 # End Paths
 workflow.add_edge("generate", END)
+
+workflow.add_edge("calculator", END)
 
 workflow.add_edge("direct", END)
 
