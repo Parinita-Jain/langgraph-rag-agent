@@ -1,7 +1,9 @@
 from dotenv import load_dotenv
 import os
 
+from langchain_core.messages import HumanMessage
 from langchain_core.messages import AIMessage
+
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 
@@ -56,6 +58,16 @@ def generate_node(state):
 
     messages = state["messages"]
 
+    conversation = ""
+
+    for message in messages:
+
+        if isinstance(message, HumanMessage):
+            conversation += f"Human: {message.content}\n\n"
+
+        elif isinstance(message, AIMessage):
+            conversation += f"AI: {message.content}\n\n"
+
     question = messages[-1].content
 
     docs = state["documents"]
@@ -63,15 +75,17 @@ def generate_node(state):
     context="\n\n".join(doc.page_content for doc in docs)
 
     prompt = f"""
-    Answer the question using ONLY the context below.
+        You are a helpful AI assistant.
 
-    Context:
-    {context}
+        Use BOTH the conversation history and the retrieved context.
 
-    Question:
-    {question}
+        Conversation:
+        {conversation}
 
-    Answer:
+        Retrieved Context:
+        {context}
+
+        Answer the user's latest question.
     """
 
     response = llm.invoke(prompt)

@@ -12,6 +12,6 @@ conversation = [
 
 for msg in conversation:
 
-    print(type(msg))#.__name__)
+    print(type(msg).__name__)
     print(msg.content)
     print("-" * 40)
