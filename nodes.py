@@ -9,7 +9,7 @@ from langchain_chroma import Chroma
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-from schemas import RouteDecision
+from schemas import ToolDecision
 
 import re
 
@@ -87,7 +87,7 @@ Standalone Question:
     print("Rewritten Question:", response.content)
 
     return {
-        "rewritten_question": response.content
+        "tool_input": response.content
     }
 
 #retrieve node
@@ -95,7 +95,7 @@ Standalone Question:
 def retrieve_node(state):
     print("\n ========= Retrieve Node =======")
 
-    question = state["rewritten_question"]
+    question = state["tool_input"]
 
     docs = vectorstore.similarity_search(question,k=7)
 
@@ -158,11 +158,13 @@ def router_node(state):
 
     if question_lower in greetings:
 
-        print("Route: direct (Python Rule)")
+        print("Tool: direct (Python Rule)")
 
         return {
-            "route": "direct"
+            "tool": "direct",
+            "tool_input": ""
         }
+
 
     # -------------------------
     # Rule 2 : Calculator
@@ -172,10 +174,11 @@ def router_node(state):
 
     if re.fullmatch(calculator_pattern, question):
 
-        print("Route: calculator (Python Rule)")
+        print("Tool: calculator (Python Rule)")
 
         return {
-            "route": "calculator"
+            "tool": "calculator",
+            "tool_input": question
         }
 
     # -------------------------
@@ -183,37 +186,60 @@ def router_node(state):
     # -------------------------
 
     prompt = f"""
-You are a routing agent.
+You are a tool planning assistant.
 
-Choose exactly ONE route.
+Choose exactly ONE tool.
+
+Available tools:
 
 direct
 - greetings
 - casual conversation
 
-retrieve
+rag
 - questions about LangGraph
 - FastAPI
 - RAG
 - document knowledge
 
+For the chosen tool, also generate the appropriate tool_input.
+
+Examples:
+
+Question:
+Explain FastAPI
+
+Output:
+tool = rag
+tool_input = Explain FastAPI
+
+Question:
+What is LangGraph?
+
+Output:
+tool = rag
+tool_input = What is LangGraph?
+
 Question:
 {question}
 """
 
-    structured_llm = llm.with_structured_output(RouteDecision)
-
+    structured_llm = llm.with_structured_output(ToolDecision)
+    
     result = structured_llm.invoke(prompt)
+    print("Tool:", result.tool)
+    print("Tool Input:", result.tool_input)
 
-    print("Route:", result.route, "(Gemini)")
 
+   
     return {
-        "route": result.route
+        "tool": result.tool,
+        "tool_input": result.tool_input
     }
 #   Route Selector   
 def choose_route(state):
 
-    return state["route"]
+    return state["tool"]
 
 #Direct Reply Node
 
@@ -232,10 +258,12 @@ def calculator_node(state):
 
     print("\n===== CALCULATOR NODE =====")
 
-    question = state["messages"][-1].content
+    expression = state["tool_input"]
+
+  
 
     try:
-        result = eval(question)
+        result = eval(expression)
 
         return {
             "messages": [
@@ -252,3 +280,21 @@ def calculator_node(state):
                 )
             ]
         }
+    
+TOOLS = {
+    "direct": direct_node,
+    "calculator": calculator_node,
+}
+
+def executor_node(state):
+
+    print("\n===== EXECUTOR NODE =====")
+
+    tool_name = state["tool"]
+
+    print("Executing:", tool_name)
+
+    tool = TOOLS[tool_name]
+
+    return tool(state)
+

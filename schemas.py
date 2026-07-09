@@ -2,5 +2,11 @@ from typing import Literal
 from pydantic import BaseModel
 
 
-class RouteDecision(BaseModel):
-    route: Literal["direct", "retrieve", "calculator"]
+class ToolDecision(BaseModel):
+    tool: Literal[
+        "direct",
+        "calculator",
+        "rag"
+    ]
+
+    tool_input: str

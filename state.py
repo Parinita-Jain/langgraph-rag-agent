@@ -5,7 +5,6 @@ from typing_extensions import TypedDict
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 
-
 class AgentState(TypedDict):
 
     messages: Annotated[
@@ -13,8 +12,9 @@ class AgentState(TypedDict):
         add_messages
     ]
 
-    route: str
+    tool: str
 
-    rewritten_question: str
+    tool_input: str
 
     documents: list
+    
