@@ -9,8 +9,7 @@ from langchain_chroma import Chroma
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-from schemas import ToolDecision
-
+from schemas import PlannerOutput
 import re
 
 load_dotenv()
@@ -188,7 +187,7 @@ def router_node(state):
     prompt = f"""
 You are a tool planning assistant.
 
-Choose exactly ONE tool.
+Your job is to create a tool execution plan.
 
 Available tools:
 
@@ -196,46 +195,36 @@ direct
 - greetings
 - casual conversation
 
+calculator
+- arithmetic calculations
+
 rag
 - questions about LangGraph
 - FastAPI
 - RAG
 - document knowledge
 
-For the chosen tool, also generate the appropriate tool_input.
-
-Examples:
-
-Question:
-Explain FastAPI
-
-Output:
-tool = rag
-tool_input = Explain FastAPI
-
-Question:
-What is LangGraph?
-
-Output:
-tool = rag
-tool_input = What is LangGraph?
+Return exactly one tool call inside the tool_calls list.
 
 Question:
 {question}
 """
 
-    structured_llm = llm.with_structured_output(ToolDecision)
+
+    structured_llm = llm.with_structured_output(PlannerOutput)
     
     result = structured_llm.invoke(prompt)
-    print("Tool:", result.tool)
-    print("Tool Input:", result.tool_input)
 
+    tool_call = result.tool_calls[0]
 
-   
+    print("Tool:", tool_call.tool)
+    print("Tool Input:", tool_call.tool_input)
+
     return {
-        "tool": result.tool,
-        "tool_input": result.tool_input
+    "tool": tool_call.tool,
+    "tool_input": tool_call.tool_input
     }
+
 #   Route Selector   
 def choose_route(state):
 
@@ -280,10 +269,27 @@ def calculator_node(state):
                 )
             ]
         }
-    
+
+def rag_tool(state):
+
+    print("\n===== RAG TOOL =====")
+
+    # Step 1 : Rewrite
+    state.update(rewrite_node(state))
+
+    # Step 2 : Retrieve
+
+    state.update(retrieve_node(state))
+
+    # Step 3 : Generate
+    generate_result = generate_node(state)
+
+    return generate_result
+
 TOOLS = {
     "direct": direct_node,
     "calculator": calculator_node,
+    "rag": rag_tool,
 }
 
 def executor_node(state):

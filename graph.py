@@ -6,10 +6,7 @@ from nodes import (
     agent_node,
     router_node,
     choose_route,
-    executor_node,
-    retrieve_node,
-    generate_node,
-    rewrite_node
+    executor_node
 )
 
 # Create Graph
@@ -21,13 +18,6 @@ workflow.add_node("agent", agent_node)
 workflow.add_node("router", router_node)
 
 workflow.add_node("executor", executor_node)
-
-workflow.add_node("retrieve", retrieve_node)
-
-workflow.add_node("rewrite", rewrite_node)
-
-workflow.add_node("generate", generate_node)
-
 
 # Start Flow
 workflow.add_edge(START, "agent")
@@ -42,17 +32,10 @@ workflow.add_conditional_edges(
     {
         "direct": "executor",
         "calculator": "executor",
-        "rag": "rewrite"
+        "rag": "executor"
     }
 )
 # RAG Path
-
-workflow.add_edge("rewrite", "retrieve")
-
-workflow.add_edge("retrieve", "generate")
-
-# End Paths
-workflow.add_edge("generate", END)
 
 workflow.add_edge("executor", END)
 

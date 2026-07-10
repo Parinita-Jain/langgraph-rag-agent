@@ -2,7 +2,8 @@ from typing import Literal
 from pydantic import BaseModel
 
 
-class ToolDecision(BaseModel):
+class ToolCall(BaseModel):
+
     tool: Literal[
         "direct",
         "calculator",
@@ -10,3 +11,7 @@ class ToolDecision(BaseModel):
     ]
 
     tool_input: str
+
+class PlannerOutput(BaseModel):
+
+    tool_calls: list[ToolCall]
