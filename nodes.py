@@ -54,32 +54,27 @@ def build_conversation(messages):
 
     return conversation
 
-# rewriting query
+
 
 def rewrite_node(state):
     print("\n ======= rewrite node =====")
-    conversation = build_conversation(state["messages"])
+    question = state["tool_input"]
 
     prompt = f"""
-You are a query rewriting assistant.
+        You are a query rewriting assistant.
 
-Rewrite ONLY the user's latest question into a standalone question.
+        Rewrite the following question into a standalone question.
 
-Do NOT answer the question.
+        Do NOT answer it.
 
-Do NOT change the user's intent.
+        Do NOT change its meaning.
 
-Do NOT infer a different meaning.
+        Question:
 
-Keep abbreviations like RAG, FastAPI, LangGraph exactly as written.
+        {question}
 
-Return only the rewritten question.
-
-Conversation:
-{conversation}
-
-Standalone Question:
-"""
+        Standalone Question:
+        """
 
     response = llm.invoke(prompt)
 
@@ -105,27 +100,29 @@ def retrieve_node(state):
 def generate_node(state):
     print("\n ======= generate node =====")
 
-    messages = state["messages"]
-
-    conversation = build_conversation(state["messages"]) 
-
     docs = state["documents"]
 
     context="\n\n".join(doc.page_content for doc in docs)
 
+    question = state["tool_input"]
+
     prompt = f"""
-        You are a helpful AI assistant.
+    You are the RAG tool.
 
-        Use BOTH the conversation history and the retrieved context.
+    Your job is ONLY to answer the assigned tool input.
 
-        Conversation:
-        {conversation}
+    Do NOT answer any other part of the user's request.
 
-        Retrieved Context:
-        {context}
+    Question:
 
-        Answer the user's latest question.
-    """
+    {question}
+
+    Retrieved Context:
+
+    {context}
+
+    Answer only this question.
+    """   
 
     response = llm.invoke(prompt)
 
@@ -193,9 +190,9 @@ def router_node(state):
     # -------------------------
 
     prompt = f"""
-You are a tool planning assistant.
+You are an AI planning assistant.
 
-Your job is to create a tool execution plan.
+Your job is to create an execution plan.
 
 Available tools:
 
@@ -212,9 +209,19 @@ rag
 - RAG
 - document knowledge
 
-Return exactly one tool call inside the tool_calls list.
+Rules:
+
+1. You may use ONE OR MORE tools.
+
+2. If multiple independent tasks are requested,
+   return multiple tool_calls.
+
+3. Keep the original order of execution.
+
+4. Generate the correct tool_input for every tool.
 
 Question:
+
 {question}
 """
 
@@ -224,7 +231,7 @@ Question:
     result = structured_llm.invoke(prompt)
 
     tool_call = result.tool_calls[0]
-
+    
     print("Tool:", tool_call.tool)
     print("Tool Input:", tool_call.tool_input)
 
@@ -234,7 +241,7 @@ Question:
 
     }
 
-#   Route Selector   
+ 
 def choose_route(state):
 
     tool_call = state["tool_calls"][0]
@@ -293,9 +300,7 @@ def rag_tool(state):
     state.update(retrieve_node(state))
 
     # Step 3 : Generate
-    generate_result = generate_node(state)
-
-    return generate_result
+    return generate_node(state)
 
 TOOLS = {
     "direct": direct_node,
@@ -307,21 +312,77 @@ def executor_node(state):
 
     print("\n===== EXECUTOR NODE =====")
 
-    tool_calls = state["tool_calls"]
+    tool_results = []
 
-    # For now we execute only ONE tool
-    tool_call = tool_calls[0]
+    for tool_call in state["tool_calls"]:
 
-    tool_name = tool_call.tool
+        tool_name = tool_call.tool
+        tool_input = tool_call.tool_input
 
-    tool_input = tool_call.tool_input
+        print("Executing:", tool_name)
 
-    print("Executing:", tool_name)
+        tool_state = state.copy()
+        tool_state["tool_input"] = tool_input
 
-    # Create a temporary state for the tool
-    tool_state = state.copy()
-    tool_state["tool_input"] = tool_input
+        tool_function = TOOLS[tool_name]
 
-    tool = TOOLS[tool_name]
+        result = tool_function(tool_state)
 
-    return tool(tool_state)
+        tool_results.append(result)
+
+    print("\n===== TOOL RESULTS =====")
+    print(tool_results)
+
+    return synthesize_response(
+    state,
+    tool_results
+)
+
+
+def synthesize_response(state, tool_results):
+
+    print("\n===== SYNTHESIZER =====")
+
+    conversation = build_conversation(state["messages"])
+
+    results = ""
+
+    for i, result in enumerate(tool_results, start=1):
+
+        answer = result["messages"][0].content
+
+        results += f"""
+Tool {i} Result:
+{answer}
+--------------------------------
+"""
+
+    prompt = f"""
+You are a helpful AI assistant.
+
+The tools have already solved the problem.
+
+Do NOT call any tools.
+
+Combine the tool results into one natural response.
+
+Conversation:
+
+{conversation}
+
+Tool Results:
+
+{results}
+"""
+
+    response = llm.invoke(prompt)
+
+    return {
+
+        "messages":[
+
+            AIMessage(content=response.content)
+
+        ]
+
+    }
