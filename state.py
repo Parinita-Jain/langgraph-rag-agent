@@ -12,9 +12,6 @@ class AgentState(TypedDict):
         add_messages
     ]
 
-    tool: str
-
-    tool_input: str
+    tool_calls: list
 
     documents: list
-    

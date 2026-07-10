@@ -9,7 +9,7 @@ from langchain_chroma import Chroma
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-from schemas import PlannerOutput
+from schemas import PlannerOutput, ToolCall
 import re
 
 load_dotenv()
@@ -160,9 +160,13 @@ def router_node(state):
         print("Tool: direct (Python Rule)")
 
         return {
-            "tool": "direct",
-            "tool_input": ""
-        }
+             "tool_calls": [
+                    ToolCall(
+                        tool="direct",
+                        tool_input=""
+                    )
+                ]
+               }
 
 
     # -------------------------
@@ -176,9 +180,13 @@ def router_node(state):
         print("Tool: calculator (Python Rule)")
 
         return {
-            "tool": "calculator",
-            "tool_input": question
-        }
+                "tool_calls": [
+                        ToolCall(
+                            tool="calculator",
+                            tool_input=question
+                               )
+                             ]
+                }
 
     # -------------------------
     # Rule 3 : Ask Gemini
@@ -221,14 +229,17 @@ Question:
     print("Tool Input:", tool_call.tool_input)
 
     return {
-    "tool": tool_call.tool,
-    "tool_input": tool_call.tool_input
+
+    "tool_calls": result.tool_calls
+
     }
 
 #   Route Selector   
 def choose_route(state):
 
-    return state["tool"]
+    tool_call = state["tool_calls"][0]
+
+    return tool_call.tool
 
 #Direct Reply Node
 
@@ -296,11 +307,21 @@ def executor_node(state):
 
     print("\n===== EXECUTOR NODE =====")
 
-    tool_name = state["tool"]
+    tool_calls = state["tool_calls"]
+
+    # For now we execute only ONE tool
+    tool_call = tool_calls[0]
+
+    tool_name = tool_call.tool
+
+    tool_input = tool_call.tool_input
 
     print("Executing:", tool_name)
 
+    # Create a temporary state for the tool
+    tool_state = state.copy()
+    tool_state["tool_input"] = tool_input
+
     tool = TOOLS[tool_name]
 
-    return tool(state)
-
+    return tool(tool_state)
