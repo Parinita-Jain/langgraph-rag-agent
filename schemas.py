@@ -2,7 +2,9 @@ from typing import Literal
 from pydantic import BaseModel
 
 
-class ToolCall(BaseModel):
+class PlanStep(BaseModel):
+
+    id: int
 
     tool: Literal[
         "direct",
@@ -12,6 +14,8 @@ class ToolCall(BaseModel):
 
     tool_input: str
 
+    depends_on: list[int] = []
+
 class PlannerOutput(BaseModel):
 
-    tool_calls: list[ToolCall]
+    steps: list[PlanStep]

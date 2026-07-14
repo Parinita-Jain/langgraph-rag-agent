@@ -9,7 +9,7 @@ from langchain_chroma import Chroma
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-from schemas import PlannerOutput, ToolCall
+from schemas import PlannerOutput, PlanStep
 import re
 
 import ast
@@ -161,13 +161,15 @@ def router_node(state):
         print("Tool: direct (Python Rule)")
 
         return {
-             "tool_calls": [
-                    ToolCall(
+                "steps": [
+                    PlanStep(
+                        id=1,
                         tool="direct",
-                        tool_input=""
+                        tool_input="",
+                        depends_on=[]
                     )
                 ]
-               }
+            }
 
 
     # -------------------------
@@ -181,12 +183,14 @@ def router_node(state):
         print("Tool: calculator (Python Rule)")
 
         return {
-                "tool_calls": [
-                        ToolCall(
+                    "steps": [
+                        PlanStep(
+                            id=1,
                             tool="calculator",
-                            tool_input=question
-                               )
-                             ]
+                            tool_input=question,
+                            depends_on=[]
+                        )
+                    ]
                 }
 
     # -------------------------
@@ -218,11 +222,27 @@ Rules:
 1. You may use ONE OR MORE tools.
 
 2. If multiple independent tasks are requested,
-   return multiple tool_calls.
+   Return a workflow plan.
+
+   Each step must contain:
+
+    - id
+    - tool
+    - tool_input
+
+   Return a list called steps.
+   For every step, also return depends_on.
+
+   If the step has no dependencies,
+   return an empty list.
 
 3. Keep the original order of execution.
 
-4. Generate the correct tool_input for every tool.
+4. Generate a precise and self-contained tool_input for every tool.
+
+   Each tool_input should contain only the information needed by that tool.
+
+   Do not include parts of the request that belong to another tool.
 
 Question:
 
@@ -234,23 +254,26 @@ Question:
     
     result = structured_llm.invoke(prompt)
 
-    tool_call = result.tool_calls[0]
-    
-    print("Tool:", tool_call.tool)
-    print("Tool Input:", tool_call.tool_input)
+    print("\n===== EXECUTION PLAN =====")
+
+    for step in result.steps:
+        print(
+            f"Step {step.id}: "
+            f"{step.tool} "
+            f"(input='{step.tool_input}', "
+            f"depends_on={step.depends_on})"
+        )
 
     return {
-
-    "tool_calls": result.tool_calls
-
+        "steps": result.steps
     }
 
  
 def choose_route(state):
 
-    tool_call = state["tool_calls"][0]
+    step = state["steps"][0]
 
-    return tool_call.tool
+    return step.tool
 
 #Direct Reply Node
 
@@ -346,14 +369,10 @@ def rag_tool(state):
 
     print("\n===== RAG TOOL =====")
 
-    # Step 1 : Rewrite
     state.update(rewrite_node(state))
-
-    # Step 2 : Retrieve
 
     state.update(retrieve_node(state))
 
-    # Step 3 : Generate
     return generate_node(state)
 
 TOOLS = {
@@ -368,12 +387,15 @@ def executor_node(state):
 
     tool_results = []
 
-    for tool_call in state["tool_calls"]:
+    for step in state["steps"]:
 
-        tool_name = tool_call.tool
-        tool_input = tool_call.tool_input
+        print(f"\nExecuting Step {step.id}"
+              f" (depends_on={step.depends_on})")
 
-        print("Executing:", tool_name)
+        tool_name = step.tool
+        tool_input = step.tool_input
+
+        print("Tool:", tool_name)
 
         tool_state = state.copy()
         tool_state["tool_input"] = tool_input
@@ -401,15 +423,15 @@ def synthesize_response(state, tool_results):
 
     results = ""
 
-    for i, result in enumerate(tool_results, start=1):
+    for step, result in zip(state["steps"], tool_results):
 
         answer = result["messages"][0].content
 
         results += f"""
-Tool {i} Result:
-{answer}
---------------------------------
-"""
+        Step {step.id} Result:
+        {answer}
+        --------------------------------
+        """
 
     prompt = f"""
 You are a helpful AI assistant.

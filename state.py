@@ -1,9 +1,11 @@
-from typing import Annotated
-from typing import Sequence
+from typing import Annotated, Sequence
 from typing_extensions import TypedDict
 
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
+
+from schemas import PlanStep
+
 
 class AgentState(TypedDict):
 
@@ -12,6 +14,8 @@ class AgentState(TypedDict):
         add_messages
     ]
 
-    tool_calls: list
+    steps: list[PlanStep]
+
+    tool_input: str
 
     documents: list
