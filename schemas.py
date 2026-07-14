@@ -9,12 +9,13 @@ class PlanStep(BaseModel):
     tool: Literal[
         "direct",
         "calculator",
-        "rag"
+        "rag",
+        "llm"
     ]
 
     tool_input: str
 
-    depends_on: list[int] = []
+    depends_on: list[int]
 
 class PlannerOutput(BaseModel):
 

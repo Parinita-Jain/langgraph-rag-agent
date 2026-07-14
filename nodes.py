@@ -135,6 +135,10 @@ def generate_node(state):
         AIMessage(content=response.content)
     ]
 }
+
+# ===========================
+# Planner
+# ===========================
 def planner_node(state):
 
     question = state["messages"][-1].content
@@ -204,18 +208,22 @@ Your job is to create an execution plan.
 
 Available tools:
 
-direct
-- greetings
-- casual conversation
+    direct
+    - greetings only
 
-calculator
-- arithmetic calculations
+    calculator
+    - arithmetic calculations
 
-rag
-- questions about LangGraph
-- FastAPI
-- RAG
-- document knowledge
+    rag
+    - questions requiring document retrieval
+
+    llm
+    - reasoning
+    - explanations
+    - comparisons
+    - summarization
+    - answering questions that do not require retrieval
+
 
 Rules:
 
@@ -275,10 +283,13 @@ def choose_next_node(state):
 
     return step.tool
 
+# ===========================
+# Tools
+# ===========================
+
 #Direct Reply Node
 
-
-def direct_node(state):
+def greeting_tool(state):
 
     return {
         "messages": [
@@ -364,31 +375,50 @@ def calculator_node(state):
                 )
             ]
         }
+    
+def llm_tool(state):
+
+    print("\n===== LLM TOOL =====")
+
+    prompt = state["tool_input"]
+
+    response = llm.invoke(prompt)
+
+    return {
+        "messages": [
+            AIMessage(content=response.content)
+        ]
+    }
 
 def rag_tool(state):
 
     print("\n===== RAG TOOL =====")
 
-    state.update(rewrite_node(state))
+    tool_state = state.copy()
 
-    state.update(retrieve_node(state))
+    tool_state.update(rewrite_node(tool_state))
+    tool_state.update(retrieve_node(tool_state))
+
 
     return generate_node(state)
 
 TOOLS = {
-    "direct": direct_node,
+    "direct": greeting_tool,
     "calculator": calculator_node,
     "rag": rag_tool,
+    "llm": llm_tool,
 }
+
+# ===========================
+# Executor
+# ===========================
 
 def can_execute(step, completed_steps):
 
-    for dependency in step.depends_on:
-
-        if dependency not in completed_steps:
-            return False
-
-    return True
+    return all(
+    dependency in completed_steps
+    for dependency in step.depends_on
+    )
 
 def get_ready_steps(pending_steps, completed_steps):
 
@@ -402,9 +432,9 @@ def get_ready_steps(pending_steps, completed_steps):
 
     return ready_steps
 
-import re
 
-def resolve_dependencies(tool_input, tool_results):
+
+def resolve_step_references(tool_input, tool_results):
 
     pattern = r"#(\d+)"
 
@@ -413,6 +443,11 @@ def resolve_dependencies(tool_input, tool_results):
     for step_id in matches:
 
         step_id = int(step_id)
+
+        if step_id not in tool_results:
+            raise ValueError(
+                f"Step {step_id} has not been executed yet."
+            )
 
         result = tool_results[step_id]["messages"][0].content
 
@@ -462,12 +497,14 @@ def executor_node(state):
             )
 
             tool_name = step.tool
-            tool_input = resolve_dependencies(
+            tool_input = step.tool_input
+            tool_input = resolve_step_references(
                             tool_input,
                             tool_results
                         )
 
-            print("Tool:", tool_name)
+            print("Original Input:", step.tool_input)
+            print("Resolved Input:", tool_input)
 
             tool_state = state.copy()
             tool_state["tool_input"] = tool_input
@@ -492,6 +529,9 @@ def executor_node(state):
     tool_results
 )
 
+# ===========================
+# Synthesizer
+# ===========================
 
 def synthesize_response(state, tool_results):
 
