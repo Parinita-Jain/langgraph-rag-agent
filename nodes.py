@@ -135,12 +135,12 @@ def generate_node(state):
         AIMessage(content=response.content)
     ]
 }
-def router_node(state):
+def planner_node(state):
 
     question = state["messages"][-1].content
     question_lower = question.lower().strip()
 
-    print("\n===== ROUTER NODE =====")
+    print("\n===== PLANNER NODE =====")
     print("Question:", question)
 
     # -------------------------
@@ -269,7 +269,7 @@ Question:
     }
 
  
-def choose_route(state):
+def choose_next_node(state):
 
     step = state["steps"][0]
 
@@ -381,30 +381,108 @@ TOOLS = {
     "rag": rag_tool,
 }
 
+def can_execute(step, completed_steps):
+
+    for dependency in step.depends_on:
+
+        if dependency not in completed_steps:
+            return False
+
+    return True
+
+def get_ready_steps(pending_steps, completed_steps):
+
+    ready_steps = []
+
+    for step in pending_steps:
+
+        if can_execute(step, completed_steps):
+
+            ready_steps.append(step)
+
+    return ready_steps
+
+import re
+
+def resolve_dependencies(tool_input, tool_results):
+
+    pattern = r"#(\d+)"
+
+    matches = re.findall(pattern, tool_input)
+
+    for step_id in matches:
+
+        step_id = int(step_id)
+
+        result = tool_results[step_id]["messages"][0].content
+
+        tool_input = tool_input.replace(
+            f"#{step_id}",
+            result
+        )
+
+    return tool_input
+
 def executor_node(state):
 
     print("\n===== EXECUTOR NODE =====")
 
-    tool_results = []
+    tool_results = {}
 
-    for step in state["steps"]:
+    completed_steps = set()
 
-        print(f"\nExecuting Step {step.id}"
-              f" (depends_on={step.depends_on})")
+    pending_steps = list(state["steps"])
 
-        tool_name = step.tool
-        tool_input = step.tool_input
+    while pending_steps:
 
-        print("Tool:", tool_name)
+        ready_steps = get_ready_steps(
+            pending_steps,
+            completed_steps
+        )
 
-        tool_state = state.copy()
-        tool_state["tool_input"] = tool_input
+        if not ready_steps:
+            raise ValueError(
+                f"No executable step found.\n"
+                f"Completed: {completed_steps}\n"
+                f"Pending: {[step.id for step in pending_steps]}"
+            )
 
-        tool_function = TOOLS[tool_name]
+        print("\n===== READY STEPS =====")
 
-        result = tool_function(tool_state)
+        for step in ready_steps:
+            print(
+                f"Step {step.id}: {step.tool}"
+            )
 
-        tool_results.append(result)
+        for step in ready_steps:
+
+            print(
+                f"\nExecuting Step {step.id}"
+                f" (depends_on={step.depends_on})"
+            )
+
+            tool_name = step.tool
+            tool_input = resolve_dependencies(
+                            tool_input,
+                            tool_results
+                        )
+
+            print("Tool:", tool_name)
+
+            tool_state = state.copy()
+            tool_state["tool_input"] = tool_input
+
+            tool_function = TOOLS[tool_name]
+
+            result = tool_function(tool_state)
+
+            tool_results[step.id] = result
+
+            completed_steps.add(step.id)
+
+            pending_steps.remove(step)
+
+        print("\nCompleted:", completed_steps)
 
     print("\n===== TOOL RESULTS =====")
     print(tool_results)
@@ -423,15 +501,17 @@ def synthesize_response(state, tool_results):
 
     results = ""
 
-    for step, result in zip(state["steps"], tool_results):
+    for step in state["steps"]:
+
+        result = tool_results[step.id]
 
         answer = result["messages"][0].content
 
         results += f"""
-        Step {step.id} Result:
-        {answer}
-        --------------------------------
-        """
+                Step {step.id} Result:
+                {answer}
+                --------------------------------
+                """
 
     prompt = f"""
 You are a helpful AI assistant.

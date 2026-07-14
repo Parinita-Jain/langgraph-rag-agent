@@ -4,8 +4,8 @@ from state import AgentState
 
 from nodes import (
     agent_node,
-    router_node,
-    choose_route,
+    planner_node,
+    choose_next_node,
     executor_node
 )
 
@@ -15,20 +15,20 @@ workflow = StateGraph(AgentState)
 # Add Nodes
 workflow.add_node("agent", agent_node)
 
-workflow.add_node("router", router_node)
+workflow.add_node("planner", planner_node)
 
 workflow.add_node("executor", executor_node)
 
 # Start Flow
 workflow.add_edge(START, "agent")
 
-# Agent → Router
-workflow.add_edge("agent", "router")
+# Agent → Planner
+workflow.add_edge("agent", "planner")
 
 # Conditional Routing
 workflow.add_conditional_edges(
-    "router",
-    choose_route,
+    "planner",
+    choose_next_node,
     {
         "direct": "executor",
         "calculator": "executor",
