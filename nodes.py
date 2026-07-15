@@ -10,6 +10,8 @@ from langchain_chroma import Chroma
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from schemas import PlannerOutput, PlanStep
+
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import re
 
 import ast
@@ -131,10 +133,16 @@ def generate_node(state):
     response = llm.invoke(prompt)
 
     return {
-    "messages": [
-        AIMessage(content=response.content)
-    ]
-}
+
+            "messages": [
+                AIMessage(content=response.content)
+            ],
+
+            "output": {
+                "answer": response.content
+            }
+
+        }
 
 # ===========================
 # Planner
@@ -251,6 +259,59 @@ Rules:
    Each tool_input should contain only the information needed by that tool.
 
    Do not include parts of the request that belong to another tool.
+5. If a step depends on the output of a previous step, reference the required output field.
+
+    Use this format:
+
+    #<step_id>.<field>
+
+    Examples:
+
+    #1.value
+    #2.answer
+
+    Do NOT use only #1 or #2.
+
+    For calculator outputs use:
+    #<step>.value
+
+    For llm/rag/direct outputs use:
+    #<step>.answer
+
+    Example 1
+
+    User:
+    Calculate 15% of ₹800.
+    Then multiply the result by 5.
+
+    Steps:
+
+    1.
+    tool = calculator
+    tool_input = 0.15 * 800
+
+    2.
+    tool = calculator
+    tool_input = #1.value * 5
+    depends_on = [1]
+
+    Example 2
+
+    User:
+    Explain RAG.
+    Summarize the explanation.
+
+    Steps:
+
+    1.
+    tool = rag
+    tool_input = Explain RAG
+
+    2.
+    tool = llm
+    tool_input = Summarize #1.answer
+    depends_on = [1]
+
 
 Question:
 
@@ -277,11 +338,6 @@ Question:
     }
 
  
-def choose_next_node(state):
-
-    step = state["steps"][0]
-
-    return step.tool
 
 # ===========================
 # Tools
@@ -291,12 +347,18 @@ def choose_next_node(state):
 
 def greeting_tool(state):
 
+    answer = "Hello! How can I help you today?"
+
     return {
+
         "messages": [
-            AIMessage(
-                content="Hello! How can I help you today?"
-            )
-        ]
+            AIMessage(content=answer)
+        ],
+
+        "output": {
+            "answer": answer
+        }
+
     }
 
 UNARY_OPERATORS = {
@@ -361,10 +423,16 @@ def calculator_node(state):
         result = evaluate(tree.body)
        
         return {
-            "messages": [
-                AIMessage(content=str(result))
-            ]
-        }
+
+                    "messages": [
+                        AIMessage(content=str(result))
+                    ],
+
+                    "output": {
+                        "value": result
+                    }
+
+                }
 
     except Exception:
 
@@ -385,9 +453,15 @@ def llm_tool(state):
     response = llm.invoke(prompt)
 
     return {
+
         "messages": [
             AIMessage(content=response.content)
-        ]
+        ],
+
+        "output": {
+            "answer": response.content
+        }
+
     }
 
 def rag_tool(state):
@@ -400,7 +474,7 @@ def rag_tool(state):
     tool_state.update(retrieve_node(tool_state))
 
 
-    return generate_node(state)
+    return generate_node(tool_state)
 
 TOOLS = {
     "direct": greeting_tool,
@@ -436,11 +510,11 @@ def get_ready_steps(pending_steps, completed_steps):
 
 def resolve_step_references(tool_input, tool_results):
 
-    pattern = r"#(\d+)"
+    pattern = r"#(\d+)\.(\w+)"
 
     matches = re.findall(pattern, tool_input)
 
-    for step_id in matches:
+    for step_id, field in matches:
 
         step_id = int(step_id)
 
@@ -449,14 +523,35 @@ def resolve_step_references(tool_input, tool_results):
                 f"Step {step_id} has not been executed yet."
             )
 
-        result = tool_results[step_id]["messages"][0].content
+        result = tool_results[step_id]["output"][field]
 
         tool_input = tool_input.replace(
-            f"#{step_id}",
-            result
+            f"#{step_id}.{field}",
+            str(result)
         )
 
     return tool_input
+
+def execute_step(step, state, tool_results):
+
+    tool_name = step.tool
+
+    tool_input = resolve_step_references(
+        step.tool_input,
+        tool_results
+    )
+
+    print("Original Input:", step.tool_input)
+    print("Resolved Input:", tool_input)
+
+    tool_state = state.copy()
+    tool_state["tool_input"] = tool_input
+
+    tool_function = TOOLS[tool_name]
+
+    result = tool_function(tool_state)
+
+    return result
 
 def executor_node(state):
 
@@ -489,35 +584,39 @@ def executor_node(state):
                 f"Step {step.id}: {step.tool}"
             )
 
-        for step in ready_steps:
+        with ThreadPoolExecutor() as executor:
 
-            print(
-                f"\nExecuting Step {step.id}"
-                f" (depends_on={step.depends_on})"
-            )
+            futures = {}
 
-            tool_name = step.tool
-            tool_input = step.tool_input
-            tool_input = resolve_step_references(
-                            tool_input,
-                            tool_results
-                        )
+            for step in ready_steps:
 
-            print("Original Input:", step.tool_input)
-            print("Resolved Input:", tool_input)
+                print(
+                    f"\nSubmitting Step {step.id}"
+                    f" (depends_on={step.depends_on})"
+                )
 
-            tool_state = state.copy()
-            tool_state["tool_input"] = tool_input
+                future = executor.submit(
+                    execute_step,
+                    step,
+                    state,
+                    tool_results
+                )
 
-            tool_function = TOOLS[tool_name]
+                futures[future] = step
 
-            result = tool_function(tool_state)
+            for future in as_completed(futures):
 
-            tool_results[step.id] = result
+                step = futures[future]
 
-            completed_steps.add(step.id)
+                result = future.result()
 
-            pending_steps.remove(step)
+                tool_results[step.id] = result
+
+                completed_steps.add(step.id)
+
+                pending_steps.remove(step)
+
+                print(f"Completed Step {step.id}")
 
         print("\nCompleted:", completed_steps)
 
@@ -545,13 +644,15 @@ def synthesize_response(state, tool_results):
 
         result = tool_results[step.id]
 
-        answer = result["messages"][0].content
+        output = result["output"]
 
         results += f"""
-                Step {step.id} Result:
-                {answer}
-                --------------------------------
-                """
+            Step {step.id} Output:
+
+            {output}
+
+            --------------------------------
+            """
 
     prompt = f"""
 You are a helpful AI assistant.

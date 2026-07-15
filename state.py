@@ -1,4 +1,4 @@
-from typing import Annotated, Sequence
+from typing import Annotated, Sequence, Any
 from typing_extensions import TypedDict
 
 from langchain_core.messages import BaseMessage
@@ -19,3 +19,5 @@ class AgentState(TypedDict):
     tool_input: str
 
     documents: list
+
+    output: dict[str, Any]
