@@ -1,0 +1,51 @@
+Orion/
+│
+├── app.py
+├── graph.py
+├── state.py
+├── config.py
+│
+├── planner/
+│   ├── planner.py
+│   ├── validator.py
+│   ├── repair.py
+│   └── prompts.py
+│
+├── executor/
+│   ├── executor.py
+│   ├── scheduler.py
+│   ├── resolver.py
+│   └── records.py
+│
+├── tools/
+│   ├── __init__.py
+│   ├── registry.py
+│   ├── calculator.py
+│   ├── rag.py
+│   ├── llm.py
+│   └── greeting.py
+│
+├── memory/
+│   ├── short_term.py
+│   ├── long_term.py
+│   └── cache.py
+│
+├── synthesis/
+│   ├── synthesizer.py
+│   └── formatter.py
+│
+├── models/
+│   ├── plan.py
+│   ├── tool_result.py
+│   ├── execution_record.py
+│   └── agent_state.py
+│
+├── tests/
+│
+└── docs/
+
+
+Orion is a modular, planner-driven, parallel AI agent framework 
+capable of solving complex multi-step tasks using intelligent planning, 
+tool orchestration, dynamic replanning, and structured execution.
+

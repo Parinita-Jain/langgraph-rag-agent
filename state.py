@@ -21,3 +21,11 @@ class AgentState(TypedDict):
     documents: list
 
     output: dict[str, Any]
+
+    context: dict[str, Any]
+
+    tool_results: dict[int, dict]
+
+    done: bool
+
+    execution_records: list
