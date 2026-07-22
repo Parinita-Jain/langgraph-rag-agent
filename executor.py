@@ -60,7 +60,9 @@ def execute_step(step, state, tool_results):
 
             result = tool_function(tool_state)
             success = result.get("success", True)
+            end_time = time.perf_counter()
 
+            duration = end_time - start_time
             record = ExecutionRecord(
                 step_id=step.id,
                 tool=tool_name,
@@ -71,20 +73,6 @@ def execute_step(step, state, tool_results):
                 duration=duration,
                 error=result.get("error"),
 )
-            end_time = time.perf_counter()
-
-            duration = end_time - start_time
-
-            record = ExecutionRecord(
-                step_id=step.id,
-                tool=tool_name,
-                success=True,
-                retries=attempt,
-                start_time=start_time,
-                end_time=end_time,
-                duration=duration,
-                error=None,
-            )
 
             if attempt > 0:
                 print(
@@ -281,7 +269,8 @@ def executor_node(state):
 
                 completed_steps.add(step.id)
 
-                pending_steps.remove(step)
+                if step in pending_steps:
+                    pending_steps.remove(step)
 
                 print(f"Completed Step {step.id}")
 
@@ -319,5 +308,5 @@ def executor_node(state):
     return {
     "tool_results": tool_results,
     "execution_records": execution_records,
-    "context": "context",
+    "context": state["context"],
     }

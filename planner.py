@@ -3,6 +3,8 @@ from shared import llm
 from schemas import PlannerOutput, PlanStep
 from validator import validate_plan
 from registry import list_tools,get_tool_descriptions
+from errors import OrionError, ErrorType
+from langgraph.types import Command
 # ===========================
 # Planner
 # ===========================
@@ -290,10 +292,28 @@ def planner_node(state):
     structured_llm = llm.with_structured_output(PlannerOutput)
     try:
         result = structured_llm.invoke(prompt)
+
     except Exception as e:
+
         print("\nPlanner failed:")
-        raise RuntimeError(f"Planner LLM failed: {e}") from e
-    
+        print(e)
+
+        planner_error = OrionError(
+            source="planner",
+            error_type=ErrorType.INFRASTRUCTURE,
+            message=str(e),
+            recoverable=True,
+            original_exception=e
+        )
+        
+        print("\n===== RETURNING PLANNER ERROR =====")
+        print(planner_error)
+        print(type(planner_error))
+        return {
+            "steps": [],
+            "error": planner_error
+        }
+        
 
     print(result)
     print(result.steps)
@@ -347,7 +367,8 @@ def planner_node(state):
     print("\nReturning steps:")
     print(result.steps)
     return {
-        "steps": result.steps
+        "steps": result.steps,
+        "error":None
     }
 
  

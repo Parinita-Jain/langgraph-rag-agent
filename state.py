@@ -5,7 +5,9 @@ from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 
 from schemas import PlanStep
+from errors import OrionError
 
+from execution import ExecutionRecord
 
 class AgentState(TypedDict):
 
@@ -18,7 +20,7 @@ class AgentState(TypedDict):
 
     tool_input: str
 
-    documents: list
+    documents: list[Any]
 
     output: dict[str, Any]
 
@@ -28,4 +30,12 @@ class AgentState(TypedDict):
 
     done: bool
 
-    execution_records: list
+    execution_records: list[ExecutionRecord]
+
+    # ---------- NEW ----------
+
+    error: OrionError | None
+
+    errors: list[str]
+
+    iteration: int

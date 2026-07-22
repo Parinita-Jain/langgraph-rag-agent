@@ -49,3 +49,33 @@ Orion is a modular, planner-driven, parallel AI agent framework
 capable of solving complex multi-step tasks using intelligent planning, 
 tool orchestration, dynamic replanning, and structured execution.
 
+Which sprint we're on (e.g., "Sprint 2.0").
+Which file you're editing (e.g., executor_node.py).
+
+Sprint 2.0 – Robustness
+Graceful handling of planner LLM failures.
+Graceful handling of replanner failures.
+Detect infrastructure failures (quota, network, API errors).
+Prevent endless replanning loops.
+Sprint 2.0A — Replanner Stabilization
+Stop infinite replanning.
+Prevent generation of unknown tools.
+Stop retrying identical failed plans.
+Route unrecoverable failures to error_handler.
+Sprint 2.1 – Models Migration
+Replace dictionary-based results with ToolResult.
+Migrate PlanStep, ExecutionRecord, and AgentState usage throughout the code.
+Remove duplicate model definitions.
+Sprint 2.2 – Project Cleanup
+Centralize configuration.
+Replace print() statements with Python's logging module.
+Improve type hints and docstrings.
+Sprint 2.3 – Testing
+Add unit tests for:
+Planner
+Validator
+Executor
+Registry
+Calculator tool
+
+By the end of these sprints, Orion will be much more robust, maintainable, and easier to extend.

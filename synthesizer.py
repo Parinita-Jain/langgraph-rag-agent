@@ -1,6 +1,7 @@
 from utils import build_conversation
 from shared import llm
 from langchain_core.messages import AIMessage
+from errors import OrionError, ErrorType
 # ===========================
 # Synthesizer
 # ===========================
@@ -37,24 +38,39 @@ def synthesize_response(state, tool_results):
             """
 
     prompt = f"""
-You are a helpful AI assistant.
+            You are a helpful AI assistant.
 
-The tools have already solved the problem.
+            The tools have already solved the problem.
 
-Do NOT call any tools.
+            Do NOT call any tools.
 
-Combine the tool results into one natural response.
+            Combine the tool results into one natural response.
 
-Conversation:
+            Conversation:
 
-{conversation}
+            {conversation}
 
-Tool Results:
+            Tool Results:
 
-{results}
-"""
+            {results}
+            """
 
-    response = llm.invoke(prompt)
+    
+    try:
+        response = llm.invoke(prompt)
+
+    except Exception as e:
+
+        return {
+            "error": OrionError(
+                source="synthesizer",
+                error_type=ErrorType.INFRASTRUCTURE,
+                message=str(e),
+                recoverable=True,
+                original_exception=e,
+            ),
+            "done": True,
+        }
 
     return {
 
