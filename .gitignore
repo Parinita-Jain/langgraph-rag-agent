@@ -1,8 +1,35 @@
+# Virtual environments
 venv/
 .venv/
-__pycache__/
+
+# Environment variables
 .env
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Vector database
 chroma_db/
 
-*.pyc
+# IDE
+.vscode/
+.idea/
+
+# Operating System
+.DS_Store
+Thumbs.db
+
+# Test / Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Logs
+*.log

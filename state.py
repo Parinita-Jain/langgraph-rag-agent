@@ -8,6 +8,7 @@ from schemas import PlanStep
 from errors import OrionError
 
 from execution import ExecutionRecord
+from config import logger
 
 class AgentState(TypedDict):
 

@@ -57,15 +57,72 @@ Graceful handling of planner LLM failures.
 Graceful handling of replanner failures.
 Detect infrastructure failures (quota, network, API errors).
 Prevent endless replanning loops.
+Sprint 1 — Foundation (Completed)
+Project setup
+LangGraph integration
+Tool registry
+Calculator tool
+RAG tool
+LLM tool
+Direct tool
+State management (initial)
+Basic planner
+Sequential executor
 Sprint 2.0A — Replanner Stabilization
 Stop infinite replanning.
 Prevent generation of unknown tools.
 Stop retrying identical failed plans.
 Route unrecoverable failures to error_handler.
+Sprint 2.0A complete. The current architecture includes centralized state, 
+replanning, error model, conditional routing, and a working orchestration flow.
+Sprint 2.0A — Complete
+
+Completed
+
+Centralized AgentState
+Planner
+Executor
+Replanner
+Synthesizer
+Tool registry improvements
+Execution records
+Plan validation
+Conditional routing
+Centralized OrionError
+Error handler
+Dependency resolution (#1.answer)
+Successful end-to-end workflow
+Git milestone committed and pushed
+
+Sprint 2.0B
+Robust exception handling
+Planner (already done)
+Replanner
+Synthesizer
+Tool wrapper
+Retry improvements
+Honor Gemini's suggested retry delay for transient failures.
+Retry only recoverable infrastructure errors.
+Logging
+Replace print() with Python's logging module.
+Add log levels and file logging if desired.
+Smarter synthesizer
+Skip the final LLM call when there's only one final answer to return.
+Unit tests
+Planner
+Executor
+Replanner
+Error handler
+This is a good checkpoint.
+Sprint 2.0B: Reliability & Production Hardening
+git checkout main
+git merge sprint-2.0B
+git push
 Sprint 2.1 – Models Migration
 Replace dictionary-based results with ToolResult.
 Migrate PlanStep, ExecutionRecord, and AgentState usage throughout the code.
 Remove duplicate model definitions.
+
 Sprint 2.2 – Project Cleanup
 Centralize configuration.
 Replace print() statements with Python's logging module.

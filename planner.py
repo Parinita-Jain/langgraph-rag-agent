@@ -5,13 +5,14 @@ from validator import validate_plan
 from registry import list_tools,get_tool_descriptions
 from errors import OrionError, ErrorType
 from langgraph.types import Command
+from config import logger
 # ===========================
 # Planner
 # ===========================
 
 def repair_plan(question, previous_plan, errors):
 
-    print("\n===== REPAIRING PLAN =====")
+    logger.info("Repairing invalid execution plan")
 
     plan = ""
 
@@ -33,10 +34,7 @@ def repair_plan(question, previous_plan, errors):
         """
 
     tool_descriptions = get_tool_descriptions()
-    from registry import list_tools
-
-    print("\nPlanner sees tools:")
-    print(list_tools())
+    logger.debug("Available tools: %s", list_tools())
     prompt = f"""
     The following execution plan is INVALID.
 
@@ -89,8 +87,8 @@ def planner_node(state):
     question = state["messages"][-1].content
     question_lower = question.lower().strip()
 
-    print("\n===== PLANNER NODE =====")
-    print("Question:", question)
+    logger.info("Planning started")
+    logger.debug("User question: %s", question)
 
     # -------------------------
     # Rule 1 : Greetings
@@ -107,7 +105,7 @@ def planner_node(state):
 
     if question_lower in greetings:
 
-        print("Tool: direct (Python Rule)")
+        logger.info("Planner selected 'direct' tool using greeting rule")
 
         return {
                 "steps": [
@@ -129,7 +127,7 @@ def planner_node(state):
 
     if re.fullmatch(calculator_pattern, question):
 
-        print("Tool: calculator (Python Rule)")
+        logger.info("Planner selected 'calculator' tool using calculator rule")
 
         return {
                     "steps": [
@@ -295,8 +293,7 @@ def planner_node(state):
 
     except Exception as e:
 
-        print("\nPlanner failed:")
-        print(e)
+        logger.exception("Planner invocation failed")
 
         planner_error = OrionError(
             source="planner",
@@ -306,30 +303,30 @@ def planner_node(state):
             original_exception=e
         )
         
-        print("\n===== RETURNING PLANNER ERROR =====")
-        print(planner_error)
-        print(type(planner_error))
+        
+        
         return {
             "steps": [],
             "error": planner_error
         }
         
 
-    print(result)
-    print(result.steps)
+    logger.debug("Planner output: %s", result)
 
     MAX_REPAIR_ATTEMPTS = 3
 
     for attempt in range(MAX_REPAIR_ATTEMPTS):
-        print("\nBefore validation:")
-        print(result.steps)
+        
         errors = validate_plan(result.steps)
-        print("\nValidation errors:")
-        print(errors)
+        logger.debug("Validation attempt %d", attempt + 1)
+        
         if not errors:
             break
-        print("\nPlanner after repair:")
-        print(result.steps)
+
+        logger.warning(
+                            "Planner validation failed with %d errors",
+                            len(errors),
+                        )
         repaired = repair_plan(
             question,
             result.steps,
@@ -338,37 +335,37 @@ def planner_node(state):
         repair_errors = validate_plan(repaired.steps)
 
         if repair_errors:
-            print("Repair produced invalid plan.")
+            logger.warning("Planner repair produced an invalid plan")
         else:
             result = repaired
-        print("\nAfter repair:")
-        print(result.steps)
+            logger.info("Planner repaired execution plan")
+        
     else:
         
-        print("\nRegistered tools:")
-        print(list_tools())
+        logger.debug("Registered tools: %s", list_tools())
         errors = validate_plan(result.steps)
 
         if errors:
+
+            logger.error(
+                "Planner failed after %d repair attempts",
+                MAX_REPAIR_ATTEMPTS,
+            )
 
             raise ValueError(
                 "Planner could not repair the plan.\n\n"
                 + "\n".join(errors)
             )
-    print("\n===== EXECUTION PLAN =====")
+    logger.info(
+        "Planner generated %d execution steps",
+        len(result.steps),
+    )
+    logger.debug("Execution plan: %s", result.steps)
 
-    for step in result.steps:
-        print(
-            f"Step {step.id}: "
-            f"{step.tool} "
-            f"(input='{step.tool_input}', "
-            f"depends_on={step.depends_on})"
-        )
-    print("\nReturning steps:")
-    print(result.steps)
+    
     return {
         "steps": result.steps,
         "error":None
     }
 
- 
+#-------------

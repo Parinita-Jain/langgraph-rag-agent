@@ -76,3 +76,4 @@ def resolve_context_variables(tool_input, context):
             )
 
     return tool_input
+

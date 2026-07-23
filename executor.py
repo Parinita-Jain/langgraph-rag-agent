@@ -5,12 +5,14 @@ from langchain_core.messages import AIMessage
 
 from execution import ExecutionRecord
 from registry import get_tool
-from synthesizer import synthesize_response
+
 from utils import (
     get_ready_steps,
     resolve_context_variables,
     resolve_step_references,
 )
+from config import logger
+from runtime.retry import execute_with_retry
 
 
 def execute_step(step, state, tool_results):
@@ -27,8 +29,8 @@ def execute_step(step, state, tool_results):
         state["context"],
     )
 
-    print("Original Input:", step.tool_input)
-    print("Resolved Input:", tool_input)
+    logger.debug("Original input: %s", step.tool_input)
+    logger.debug("Resolved input: %s", tool_input)
 
     tool_state = {
         **state,
@@ -38,7 +40,9 @@ def execute_step(step, state, tool_results):
     tool = get_tool(tool_name)
 
     if tool is None:
-        raise ValueError(f"Unknown tool: {tool_name}")
+        raise ValueError(
+        f"Tool '{tool_name}' is not registered."
+    )
 
     max_retries = tool.retries
 
@@ -48,95 +52,81 @@ def execute_step(step, state, tool_results):
     tool_function = tool.function
 
     if tool_function is None:
-        raise ValueError(f"Unknown tool: {tool_name}")
-
-    last_exception = None
+        raise ValueError(
+                f"Tool '{tool_name}' has no registered function."
+            )
 
     start_time = time.perf_counter()
 
-    for attempt in range(max_retries + 1):
+    try:
 
-        try:
+        result = execute_with_retry(
+            tool_function,
+            tool_state,
+            tool_name=tool_name,
+            max_retries=max_retries,
+        )
 
-            result = tool_function(tool_state)
-            success = result.get("success", True)
-            end_time = time.perf_counter()
+        logger.info(
+            "Tool '%s' executed successfully",
+            tool_name,
+        )
 
-            duration = end_time - start_time
-            record = ExecutionRecord(
-                step_id=step.id,
-                tool=tool_name,
-                success=success,
-                retries=attempt,
-                start_time=start_time,
-                end_time=end_time,
-                duration=duration,
-                error=result.get("error"),
-)
+        end_time = time.perf_counter()
 
-            if attempt > 0:
-                print(
-                    f"{tool_name} succeeded "
-                    f"after {attempt} retries."
-                )
+        duration = end_time - start_time
 
-            return {
-                "result": result,
-                "record": record,
-            }
+        record = ExecutionRecord(
+            step_id=step.id,
+            tool=tool_name,
+            success=result.get("success", True),
+            retries=0,          # we'll improve this later
+            start_time=start_time,
+            end_time=end_time,
+            duration=duration,
+            error=result.get("error"),
+        )
 
-        except Exception as e:
+        return {
+            "result": result,
+            "record": record,
+        }
+        
 
-            last_exception = e
+    except Exception as e:
 
-            print(
-                f"Attempt {attempt + 1}/{max_retries + 1} "
-                f"failed for {tool_name}: {e}"
-            )
+        end_time = time.perf_counter()
 
-            if attempt < max_retries:
+        duration = end_time - start_time
 
-                wait_time = 2 ** attempt
+        record = ExecutionRecord(
+            step_id=step.id,
+            tool=tool_name,
+            success=False,
+            retries=max_retries,
+            start_time=start_time,
+            end_time=end_time,
+            duration=duration,
+            error=str(e),
+        )
 
-                print(
-                    f"Retrying in {wait_time} seconds..."
-                )
-
-                time.sleep(wait_time)
-
-    end_time = time.perf_counter()
-
-    duration = end_time - start_time
-
-    record = ExecutionRecord(
-        step_id=step.id,
-        tool=tool_name,
-        success=False,
-        retries=max_retries,
-        start_time=start_time,
-        end_time=end_time,
-        duration=duration,
-        error=str(last_exception),
-    )
-
-    return {
-        "result": {
-            "messages": [
-                AIMessage(
-                    content="Tool execution failed."
-                )
-            ],
-            "output": {},
-            "success": False,
-            "error": str(last_exception),
-        },
-        "record": record,
-    }
-
+        return {
+            "result": {
+                "messages": [
+                    AIMessage(
+                        content="Tool execution failed."
+                    )
+                ],
+                "output": {},
+                "success": False,
+                "error": str(e),
+            },
+            "record": record,
+        }
 
 def executor_node(state):
 
-    print("\n===== EXECUTOR NODE =====")
+    logger.info("Executor started")
 
     execution_records = state.get(
         "execution_records",
@@ -154,8 +144,8 @@ def executor_node(state):
         "context",
         {},
     )
-    print("\nSTATE STEPS")
-    print(state["steps"])
+    
+    logger.debug("Execution steps: %s", state["steps"])
     pending_steps = [
         step
         for step in state["steps"]
@@ -177,13 +167,13 @@ def executor_node(state):
                 f"Pending: {[step.id for step in pending_steps]}"
             )
 
-        print("\n===== READY STEPS =====")
-
-        for step in ready_steps:
-
-            print(
-                f"Step {step.id}: {step.tool}"
-            )
+        
+        logger.info(
+                    "Executing %d ready step(s)",
+                    len(ready_steps),
+                    )
+        logger.debug("Ready steps: %s", ready_steps)
+                   
 
         with ThreadPoolExecutor() as executor:
 
@@ -191,10 +181,11 @@ def executor_node(state):
 
             for step in ready_steps:
 
-                print(
-                    f"\nSubmitting Step {step.id} "
-                    f"(depends_on={step.depends_on})"
-                )
+                logger.info(
+                "Submitting step %d (%s)",
+                step.id,
+                step.tool,
+            )
 
                 future = executor.submit(
                     execute_step,
@@ -219,9 +210,10 @@ def executor_node(state):
 
                 except Exception as e:
 
-                    print(f"\nStep {step.id} failed.")
-
-                    print(e)
+                    logger.exception(
+                        "Step %d execution failed",
+                        step.id,
+                    )
 
                     result = {
                         "messages": [
@@ -272,21 +264,21 @@ def executor_node(state):
                 if step in pending_steps:
                     pending_steps.remove(step)
 
-                print(f"Completed Step {step.id}")
+                logger.info(
+                    "Completed step %d",
+                    step.id,
+                )
 
-                print("\n===== CONTEXT =====")
+                logger.debug(
+                    "Context updated after step %d: %s",
+                    step.id,
+                    list(state["context"].keys()),
+                )
 
-                print(state["context"])
-
-        print("\nCompleted:", completed_steps)
+        
 
     state["tool_results"] = tool_results
     state["execution_records"] = execution_records
-
-    print("\n===== TOOL RESULTS =====")
-    print(tool_results)
-
-    print("\n===== EXECUTION SUMMARY =====")
 
     total_time = 0.0
 
@@ -294,19 +286,22 @@ def executor_node(state):
 
         total_time += record.duration
 
-        print(
-            f"Step {record.step_id:<2} | "
-            f"{record.tool:<12} | "
-            f"{record.duration:7.3f}s | "
-            f"Retries: {record.retries} | "
-            f"{'Success' if record.success else 'Failed'}"
+        logger.debug(
+            "Step %d | %s | %.3fs | Retries=%d | %s",
+            record.step_id,
+            record.tool,
+            record.duration,
+            record.retries,
+            "Success" if record.success else "Failed",
         )
-
-    print("-" * 60)
-    print(f"Total execution time: {total_time:.3f}s")
+    
+    logger.info(
+        "Total execution time: %.3fs",
+        total_time,
+               )
 
     return {
     "tool_results": tool_results,
     "execution_records": execution_records,
     "context": state["context"],
-    }
+           }
