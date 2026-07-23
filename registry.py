@@ -1,10 +1,9 @@
 from dataclasses import dataclass
 from typing import Callable
-
+import pytest
 TOOL_REGISTRY = {}
 
-print("Registry module:", __file__)
-print("Registry id:", id(TOOL_REGISTRY))
+
 
 
 @dataclass
@@ -26,10 +25,21 @@ class Tool:
             f"Outputs: {', '.join(self.outputs)}"
         )
 
-
 def register_tool(tool: Tool):
+
+    if tool.name in TOOL_REGISTRY:
+        raise ValueError(
+            f"Tool '{tool.name}' is already registered."
+        )
+
     TOOL_REGISTRY[tool.name] = tool
 
+def clear_registry():
+    TOOL_REGISTRY.clear()
+
+
+def get_tool(name):
+    return TOOL_REGISTRY.get(name)
 
 def get_tool(name):
     return TOOL_REGISTRY.get(name)

@@ -1,15 +1,21 @@
+# Core Agent & LLM Framework
 langgraph
-
 langchain
 langchain-community
 langchain-text-splitters
 
+# Integrations & Vector Stores
 langchain-google-genai
 langchain-huggingface
 langchain-chroma
-
 chromadb
+
+# Document Processing & Embeddings
 sentence-transformers
 pypdf
 
+# Utilities & Quality Assurance
 python-dotenv
+pytest
+pytest-cov
+ruff

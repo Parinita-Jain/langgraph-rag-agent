@@ -10,21 +10,13 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Vector database
-chroma_db/
-
-# IDE
-.vscode/
-.idea/
-
-# Operating System
-.DS_Store
-Thumbs.db
-
 # Test / Coverage
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Vector database
+chroma_db/
 
 # Build artifacts
 build/
@@ -33,3 +25,11 @@ dist/
 
 # Logs
 *.log
+
+# IDE
+.vscode/
+.idea/
+
+# Operating System
+.DS_Store
+Thumbs.db
