@@ -1,11 +1,12 @@
 from registry import get_tool
 
+
 def validate_plan(steps):
     if not steps:
        return ["Execution plan is empty."]
     errors = []
 
-    #Check duplicate IDs
+    # Check duplicate IDs
 
     ids = set()
 
@@ -30,11 +31,8 @@ def validate_plan(steps):
     
     #Check dependency exists
     step_ids = {
-
     step.id
-
-    for step in steps
-
+    for step in steps 
     }
         
     for step in steps:
@@ -80,8 +78,6 @@ def validate_plan(steps):
             )
 
         expected += 1
-    if errors:
 
-        return errors
+    return errors
 
-    return []

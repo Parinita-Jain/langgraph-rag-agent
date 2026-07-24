@@ -6,7 +6,7 @@ def execute_with_retry(
     func,
     *args,
     max_retries: int = 0,
-    tool_name: str ,
+    tool_name: str,
     **kwargs,
 ):
     """
