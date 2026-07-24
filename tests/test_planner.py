@@ -233,3 +233,54 @@ def test_planner_repair_failure():
     assert mock_repair.call_count == MAX_REPAIR_ATTEMPTS
 
     assert "Planner could not repair the plan" in str(exc.value)
+
+def test_valid_multistep_llm_plan():
+
+    planner_output = PlannerOutput(
+        steps=[
+            PlanStep(
+                id=1,
+                tool="rag",
+                tool_input="Explain RAG",
+                depends_on=[]
+            ),
+            PlanStep(
+                id=2,
+                tool="llm",
+                tool_input="Summarize #1.answer",
+                depends_on=[1]
+            ),
+        ]
+    )
+
+    class FakeStructuredLLM:
+
+        def invoke(self, prompt):
+            return planner_output
+
+    with patch(
+        "planner.get_structured_llm",
+        return_value=FakeStructuredLLM(),
+    ):
+
+        state = {
+            "messages": [
+                HumanMessage(
+                    content="Explain RAG and summarize it."
+                )
+            ]
+        }
+
+        result = planner_node(state)
+
+    assert len(result["steps"]) == 2
+
+    assert result["steps"][0].tool == "rag"
+    assert result["steps"][1].tool == "llm"
+
+    assert result["steps"][0].depends_on == []
+    assert result["steps"][1].depends_on == [1]
+
+    assert result["steps"][1].tool_input == "Summarize #1.answer"
+
+    assert result["error"] is None
