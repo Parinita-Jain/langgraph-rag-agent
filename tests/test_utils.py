@@ -157,3 +157,21 @@ def test_no_context_variables():
     )
 
     assert result == "42"
+
+
+def test_missing_output_field():
+
+    tool_results = {
+        1: {
+            "output": {}
+        }
+    }
+
+    with pytest.raises(
+        ValueError,
+        match="Output field 'answer' not found for step 1."
+    ):
+        resolve_step_references(
+            "#1.answer",
+            tool_results,
+        )

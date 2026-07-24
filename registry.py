@@ -1,9 +1,7 @@
 from dataclasses import dataclass
 from typing import Callable
-import pytest
+
 TOOL_REGISTRY = {}
-
-
 
 
 @dataclass
@@ -40,10 +38,6 @@ def clear_registry():
 
 def get_tool(name):
     return TOOL_REGISTRY.get(name)
-
-def get_tool(name):
-    return TOOL_REGISTRY.get(name)
-
 
 def list_tools():
     return TOOL_REGISTRY

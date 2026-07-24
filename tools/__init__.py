@@ -43,6 +43,3 @@ register_tool(
     )
 )
 
-print("Registered tools:")
-from registry import list_tools
-print(list_tools())

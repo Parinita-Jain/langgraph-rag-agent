@@ -4,11 +4,32 @@ from schemas import PlannerOutput, PlanStep
 from validator import validate_plan
 from registry import list_tools,get_tool_descriptions
 from errors import OrionError, ErrorType
-from langgraph.types import Command
 from config import logger
+
+MAX_REPAIR_ATTEMPTS = 3
+
 # ===========================
 # Planner
 # ===========================
+
+
+GREETINGS = {
+        "hi",
+        "hello",
+        "hey",
+        "good morning",
+        "good afternoon",
+        "good evening"
+}
+
+CALCULATOR_PATTERN = re.compile(
+    r"^[0-9+\-*/().%\s]+$"
+)
+
+def get_structured_llm():
+    return llm.with_structured_output(
+        PlannerOutput
+    )
 
 def repair_plan(question, previous_plan, errors):
 
@@ -76,10 +97,8 @@ def repair_plan(question, previous_plan, errors):
     8. Preserve output variables unless they must change.
     """
 
-    structured_llm = llm.with_structured_output(
-        PlannerOutput
-    )
-
+    structured_llm = get_structured_llm()
+    
     return structured_llm.invoke(prompt)
 
 def planner_node(state):
@@ -94,51 +113,42 @@ def planner_node(state):
     # Rule 1 : Greetings
     # -------------------------
 
-    greetings = [
-        "hi",
-        "hello",
-        "hey",
-        "good morning",
-        "good afternoon",
-        "good evening"
-    ]
-
-    if question_lower in greetings:
+    if question_lower in GREETINGS:
 
         logger.info("Planner selected 'direct' tool using greeting rule")
 
         return {
-                "steps": [
-                    PlanStep(
-                        id=1,
-                        tool="direct",
-                        tool_input="",
-                        depends_on=[]
-                    )
-                ]
-            }
+            "steps": [
+                PlanStep(
+                    id=1,
+                    tool="direct",
+                    tool_input="",
+                    depends_on=[]
+                )
+            ],
+            "error": None,
+        }
 
 
     # -------------------------
     # Rule 2 : Calculator
     # -------------------------
 
-    calculator_pattern = r"^[0-9+\-*/().%\s]+$"
-
-    if re.fullmatch(calculator_pattern, question):
+    if CALCULATOR_PATTERN.fullmatch(question):
 
         logger.info("Planner selected 'calculator' tool using calculator rule")
 
         return {
-                    "steps": [
-                        PlanStep(
-                            id=1,
-                            tool="calculator",
-                            tool_input=question,
-                            depends_on=[]
-                        )
-                    ]
-                }
+            "steps": [
+                PlanStep(
+                    id=1,
+                    tool="calculator",
+                    tool_input=question,
+                    depends_on=[]
+                )
+            ],
+            "error": None,
+        }
 
     # -------------------------
     # Rule 3 : Ask Gemini
@@ -287,7 +297,7 @@ def planner_node(state):
 """
 
 
-    structured_llm = llm.with_structured_output(PlannerOutput)
+    structured_llm=get_structured_llm()
     try:
         result = structured_llm.invoke(prompt)
 
@@ -313,8 +323,7 @@ def planner_node(state):
 
     logger.debug("Planner output: %s", result)
 
-    MAX_REPAIR_ATTEMPTS = 3
-
+   
     for attempt in range(MAX_REPAIR_ATTEMPTS):
         
         errors = validate_plan(result.steps)
