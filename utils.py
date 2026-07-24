@@ -1,5 +1,6 @@
-from langchain_core.messages import AIMessage,HumanMessage
 import re
+
+from langchain_core.messages import AIMessage,HumanMessage
 
 def build_conversation(messages):
 
@@ -18,8 +19,8 @@ def build_conversation(messages):
 def can_execute(step, completed_steps):
 
     return all(
-    dependency in completed_steps
-    for dependency in step.depends_on
+        dependency in completed_steps
+        for dependency in step.depends_on
     )
 
 def get_ready_steps(pending_steps, completed_steps):
@@ -51,8 +52,15 @@ def resolve_step_references(tool_input, tool_results):
                 f"Step {step_id} has not been executed yet."
             )
 
-        result = tool_results[step_id]["output"][field]
+        
+        output = tool_results[step_id]["output"]
 
+        if field not in output:
+            raise ValueError(
+                f"Output field '{field}' not found for step {step_id}."
+            )
+
+        result = output[field]
         tool_input = tool_input.replace(
             f"#{step_id}.{field}",
             str(result)
