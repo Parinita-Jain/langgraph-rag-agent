@@ -127,7 +127,7 @@ def test_multiple_step_references():
 def test_resolve_context_variables():
 
     result = resolve_context_variables(
-        "x + y",
+        "{x} + {y}",
         {
             "x": 10,
             "y": 20,
@@ -140,13 +140,13 @@ def test_resolve_context_variables():
 def test_context_variable_missing():
 
     result = resolve_context_variables(
-        "x + z",
+        "{x} + {z}",
         {
             "x": 10,
         },
     )
 
-    assert result == "10 + z"
+    assert result == "10 + {z}"
 
 
 def test_no_context_variables():

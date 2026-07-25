@@ -138,7 +138,7 @@ def executor_node(state):
         {},
     )
 
-    completed_steps = set(tool_results.keys())
+    completed_steps = set(tool_results)
 
     state["context"] = state.get(
         "context",
@@ -259,7 +259,8 @@ def executor_node(state):
                             step.output
                         ] = first_value
 
-                completed_steps.add(step.id)
+                
+                    completed_steps.add(step.id)
 
                 if step in pending_steps:
                     pending_steps.remove(step)
@@ -280,11 +281,7 @@ def executor_node(state):
     state["tool_results"] = tool_results
     state["execution_records"] = execution_records
 
-    total_time = 0.0
-
     for record in execution_records:
-
-        total_time += record.duration
 
         logger.debug(
             "Step %d | %s | %.3fs | Retries=%d | %s",
@@ -294,6 +291,11 @@ def executor_node(state):
             record.retries,
             "Success" if record.success else "Failed",
         )
+
+    total_time = sum(
+        record.duration
+        for record in execution_records
+    )
     
     logger.info(
         "Total execution time: %.3fs",
@@ -301,7 +303,7 @@ def executor_node(state):
                )
 
     return {
-    "tool_results": tool_results,
-    "execution_records": execution_records,
-    "context": state["context"],
-           }
+        "tool_results": tool_results,
+        "execution_records": execution_records,
+        "context": state["context"],
+    }

@@ -70,16 +70,16 @@ def resolve_step_references(tool_input, tool_results):
 
 def resolve_context_variables(tool_input, context):
 
-    pattern = r"\b[a-zA-Z_][a-zA-Z0-9_]*\b"
+    pattern = r"\{([a-zA-Z_][a-zA-Z0-9_]*)\}"
 
-    variables = re.findall(pattern, tool_input)
+    matches = re.findall(pattern, tool_input)
 
-    for variable in variables:
+    for variable in matches:
 
         if variable in context:
 
             tool_input = tool_input.replace(
-                variable,
+                f"{{{variable}}}",
                 str(context[variable])
             )
 
