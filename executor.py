@@ -157,7 +157,11 @@ def executor_node(state):
         {},
     )
 
-    completed_steps = set(tool_results)
+    completed_steps = {
+        step_id
+        for step_id, result in tool_results.items()
+        if result["success"]
+    }
 
     state["context"] = state.get(
         "context",
