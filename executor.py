@@ -67,10 +67,17 @@ def execute_step(step, state, tool_results):
             max_retries=max_retries,
         )
 
-        logger.info(
-            "Tool '%s' executed successfully",
-            tool_name,
-        )
+        if result["success"]:
+            logger.info(
+                "Tool '%s' completed successfully.",
+                tool_name,
+            )
+        else:
+            logger.warning(
+                "Tool '%s' completed with failure: %s",
+                tool_name,
+                result["error"],
+            )
 
         end_time = time.perf_counter()
 
@@ -124,6 +131,18 @@ def execute_step(step, state, tool_results):
             "record": record,
         }
 
+def failed_dependencies(step, tool_results):
+    """
+    Returns a list of failed dependency IDs.
+    """
+
+    return [
+        dep
+        for dep in step.depends_on
+        if dep in tool_results
+        and not tool_results[dep]["success"]
+    ]
+
 def executor_node(state):
 
     logger.info("Executor started")
@@ -160,6 +179,64 @@ def executor_node(state):
         )
 
         if not ready_steps:
+
+            blocked_steps = [
+                step
+                for step in pending_steps
+                if failed_dependencies(step, tool_results)
+            ]
+
+            if blocked_steps:
+
+                logger.info(
+                    "Skipping %d blocked step(s).",
+                    len(blocked_steps),
+                )
+
+                for step in blocked_steps:
+
+                    failed = failed_dependencies(
+                            step,
+                            tool_results,
+                        )
+
+                    tool_results[step.id] = {
+                        "messages": [
+                            AIMessage(
+                                content=(
+                                    f"Step {step.id} skipped because "
+                                    f"dependencies {failed} failed."
+                                )
+                            )
+                        ],
+                        "output": {},
+                        "success": False,
+                        "status": "SKIPPED",
+                        "error": (
+                                f"Skipped because dependencies "
+                                f"{failed} failed."
+                            ),
+                    }
+
+                    execution_records.append(
+                        ExecutionRecord(
+                            step_id=step.id,
+                            tool=step.tool,
+                            success=False,
+                            retries=0,
+                            start_time=0,
+                            end_time=0,
+                            duration=0,
+                            error=(
+                                f"Skipped because dependencies "
+                                f"{failed} failed."
+                            ),
+                        )
+                    )
+
+                    pending_steps.remove(step)
+
+                continue
 
             raise ValueError(
                 f"No executable step found.\n"

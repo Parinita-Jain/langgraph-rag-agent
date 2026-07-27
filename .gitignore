@@ -8,6 +8,7 @@ venv/
 # Python
 __pycache__/
 *.py[cod]
+*.pyc
 *$py.class
 
 # Test / Coverage
