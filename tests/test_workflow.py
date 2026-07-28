@@ -353,5 +353,60 @@ def test_failure_propagation(mock_llm):
     assert "step_2" not in result["context"]
     assert "step_3" not in result["context"]
 
+@patch("planner.get_structured_llm")
+def test_resume_execution(mock_llm):
 
+    mock_llm.return_value = FakeLLMMultiStep()
+
+    state = {
+        "messages": [
+            HumanMessage(
+                content="Resume workflow."
+            )
+        ],
+        "context": {
+            "step_1": {
+                "answer": "Hello Orion"
+            }
+        },
+        "tool_results": {
+            1: {
+                "messages": [
+                    AIMessage(content="Hello Orion")
+                ],
+                "output": {
+                    "answer": "Hello Orion"
+                },
+                "success": True,
+                "error": None,
+            }
+        },
+        "execution_records": [],
+    }
+
+    plan = planner_node(state)
+
+    assert plan["error"] is None
+    assert len(plan["steps"]) == 2
+
+    state["steps"] = plan["steps"]
+
+    result = executor_node(state)
+
+    # Step 1 should NOT execute again
+    assert result["tool_results"][1]["success"] is True
+
+    # Step 2 should execute
+    assert result["tool_results"][2]["success"] is True
+    assert (
+        result["tool_results"][2]["output"]["answer"]
+        == "Repeat: Hello Orion"
+    )
+
+    # Context should contain both steps
+    assert "step_1" in result["context"]
+    assert "step_2" in result["context"]
+
+    # Only Step 2 should have executed during resume
+    assert len(result["execution_records"]) == 1
 
