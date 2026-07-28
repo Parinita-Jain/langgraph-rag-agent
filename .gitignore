@@ -34,3 +34,16 @@ dist/
 # Operating System
 .DS_Store
 Thumbs.db
+
+# Python caches
+.mypy_cache/
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# macOS
+.AppleDouble
+
+# Local settings
+.python-version

@@ -1,11 +1,13 @@
 import re
-from shared import llm
+
 from schemas import PlannerOutput, PlanStep
 from validator import validate_plan
-from registry import list_tools,get_tool_descriptions
+from registry import (list_tools,
+                      get_tool_descriptions,)
 from errors import OrionError, ErrorType
 from config import logger
-
+from planner_llm import get_structured_llm
+from planner_repair import repair_plan
 MAX_REPAIR_ATTEMPTS = 3
 
 # ===========================
@@ -26,80 +28,7 @@ CALCULATOR_PATTERN = re.compile(
     r"^[0-9+\-*/().%\s]+$"
 )
 
-def get_structured_llm():
-    return llm.with_structured_output(
-        PlannerOutput
-    )
 
-def repair_plan(question, previous_plan, errors):
-
-    logger.info("Repairing invalid execution plan")
-
-    plan = ""
-
-    for step in previous_plan:
-
-        plan += f"""
-            Step {step.id}
-
-            Tool:
-            {step.tool}
-
-            Input:
-            {step.tool_input}
-
-            Depends On:
-            {step.depends_on}
-
-            --------------------
-        """
-
-    tool_descriptions = get_tool_descriptions()
-    logger.debug("Available tools: %s", list_tools())
-    prompt = f"""
-    The following execution plan is INVALID.
-
-    Original User Question:
-
-    {question}
-
-    Current Plan:
-
-    {plan}
-
-    Validation Errors:
-
-    {chr(10).join(errors)}
-
-    Fix ALL validation errors.
-
-    Available Tools:
-
-    {tool_descriptions} 
-
-    Rules:
-
-    1. Keep as much of the original plan as possible.
-
-    2. Do NOT change correct steps.
-
-    3. Fix ONLY the invalid parts.
-
-    4. Return ONLY the corrected execution plan.
-    Do not include explanations.
-
-    5. Output must match PlannerOutput exactly.
-
-    6. Use ONLY the available tools listed below.
-
-    7. Preserve existing step IDs whenever possible.
-
-    8. Preserve output variables unless they must change.
-    """
-
-    structured_llm = get_structured_llm()
-    
-    return structured_llm.invoke(prompt)
 
 def planner_node(state):
 

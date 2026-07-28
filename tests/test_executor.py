@@ -550,9 +550,12 @@ def test_executor_node_skips_completed_steps():
         "context": {},
         "tool_results": {
             1: {
+                "messages": [],
                 "output": {
                     "answer": "Orion Test Response"
-                }
+                },
+                "success": True,
+                "error": None,
             }
         },
         "execution_records": [],
@@ -605,5 +608,8 @@ def test_executor_node_dependency_not_executed_after_failure():
         "execution_records": [],
     }
 
-    with pytest.raises(ValueError, match="No executable step found"):
-        executor_node(state)
+    result = executor_node(state)
+
+    assert result["tool_results"][1]["success"] is False
+
+    assert result["tool_results"][2]["status"] == "SKIPPED"

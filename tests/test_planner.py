@@ -83,7 +83,7 @@ def test_non_greeting_goes_to_llm(monkeypatch):
             return FakeStructuredLLM()
 
     monkeypatch.setattr(
-        "planner.llm",
+        "planner_llm.llm",
         FakeLLM(),
     )
 

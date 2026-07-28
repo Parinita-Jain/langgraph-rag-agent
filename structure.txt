@@ -136,3 +136,420 @@ Registry
 Calculator tool
 
 By the end of these sprints, Orion will be much more robust, maintainable, and easier to extend.
+
+#-------------
+Great! 😊 You've completed a significant milestone. I'd actually stop coding for today and take a moment to appreciate what you've built.
+
+Here's where Orion stands now.
+
+```text
+                  Orion v0.2 (Current)
+
+                     User
+                       │
+                       ▼
+                  HumanMessage
+                       │
+                       ▼
+                  planner_node()
+                       │
+              PlannerOutput
+              (execution plan)
+                       │
+                       ▼
+                 validator.py
+                       │
+             Valid execution plan
+                       │
+                       ▼
+                 executor_node()
+                       │
+        ┌──────────────┼──────────────┐
+        ▼              ▼              ▼
+   get_ready()    resolve_refs()   resolve_context()
+        │              │              │
+        └──────────────┼──────────────┘
+                       ▼
+                execute_step()
+                       │
+               Tool Registry
+                       │
+             execute_with_retry()
+                       │
+                  Tool Function
+                       │
+                       ▼
+              Tool Response
+                       │
+        ┌──────────────┼──────────────┐
+        ▼              ▼              ▼
+   tool_results      context      execution_records
+        │
+        ▼
+  Next scheduler iteration
+```
+
+---
+
+# What each module does
+
+## planner.py
+
+Responsible for:
+
+* Calling the LLM
+* Producing execution plans
+
+Produces something like:
+
+```python
+[
+    PlanStep(
+        id=1,
+        tool="search",
+        ...
+    ),
+    PlanStep(
+        id=2,
+        tool="summarize",
+        depends_on=[1],
+    )
+]
+```
+
+Planner **never executes tools**.
+
+---
+
+## validator.py
+
+Acts as the planner's reviewer.
+
+Checks things like:
+
+* duplicate IDs
+* invalid dependencies
+* missing tools
+* circular dependencies
+* bad output aliases
+
+If validation fails:
+
+```text
+Planner
+
+↓
+
+Validator
+
+↓
+
+Reject plan
+```
+
+---
+
+## registry.py
+
+Maps
+
+```text
+tool name
+```
+
+↓
+
+```text
+Python function
+```
+
+Example
+
+```text
+"echo"
+
+↓
+
+echo_tool()
+```
+
+Executor never needs to know what the tool actually does.
+
+---
+
+## executor.py
+
+This is Orion's engine.
+
+It performs:
+
+```
+Scheduling
+
+↓
+
+Dependency checking
+
+↓
+
+Parallel execution
+
+↓
+
+Retry
+
+↓
+
+Context updates
+
+↓
+
+Resume support
+
+↓
+
+Failure propagation
+```
+
+It knows nothing about LLMs.
+
+It knows nothing about business logic.
+
+It simply executes workflows.
+
+---
+
+## retry.py
+
+Provides reliability.
+
+Instead of
+
+```
+Tool
+
+↓
+
+Fail
+
+↓
+
+Workflow dies
+```
+
+you get
+
+```
+Tool
+
+↓
+
+Retry
+
+↓
+
+Retry
+
+↓
+
+Success
+```
+
+---
+
+## utils.py
+
+This is Orion's translator.
+
+It converts planner outputs into actual tool inputs.
+
+Planner says
+
+```
+Repeat #1.answer to {email}
+```
+
+Utils converts it into
+
+```
+Repeat Hello Orion to sagar@gmail.com
+```
+
+before the tool ever sees it.
+
+---
+
+# Three important state objects
+
+These are the heart of Orion.
+
+---
+
+## 1. context
+
+Workflow memory.
+
+```
+{
+    "city": "Mumbai",
+
+    "step_1": {
+        "answer": "Hello"
+    }
+}
+```
+
+Purpose:
+
+Provide reusable information to later steps.
+
+---
+
+## 2. tool_results
+
+Execution history.
+
+Contains
+
+```
+messages
+output
+success
+status
+error
+```
+
+for every executed (or skipped) step.
+
+It is the source of truth.
+
+---
+
+## 3. execution_records
+
+Performance history.
+
+Contains
+
+```
+duration
+
+retries
+
+timestamps
+
+success
+
+tool name
+```
+
+Useful for:
+
+* debugging
+* metrics
+* dashboards
+
+---
+
+# Workflow lifecycle
+
+Everything Orion does can now be summarized in nine steps.
+
+```
+1 User asks something
+
+↓
+
+2 Planner creates workflow
+
+↓
+
+3 Validator checks workflow
+
+↓
+
+4 Executor schedules ready steps
+
+↓
+
+5 Utils resolve placeholders
+
+↓
+
+6 Registry finds tools
+
+↓
+
+7 Retry executes tools
+
+↓
+
+8 Context updated
+
+↓
+
+9 Next steps unlocked
+```
+
+That's Orion in one page.
+
+---
+
+# Your development journey so far
+
+```
+Sprint 1
+──────────────
+✓ Planner
+
+✓ Registry
+
+✓ Executor
+
+✓ Retry
+
+✓ Validator
+
+✓ Utils
+
+──────────────────────────
+
+Sprint 2
+
+✓ Unit tests
+
+✓ Integration tests
+
+✓ Failure propagation
+
+✓ Parallel execution
+
+✓ Resume execution
+
+──────────────────────────
+
+Current
+
+≈ v0.2
+```
+
+---
+
+# What comes next
+
+We're now entering a different phase of development.
+
+Until now, you've been building the **engine**.
+
+The next features are about making the engine **resilient** and **production-ready**:
+
+1. **Planner Repair** – let Orion recover from invalid plans instead of failing immediately.
+2. **Checkpointing/Persistence** – save workflow state and resume after process restarts.
+3. **Observability** – richer execution summaries, timings, and diagnostics.
+4. **Streaming** – stream planner and tool outputs as they become available.
+
+Those will build naturally on the architecture you've already established.
+
+Finally, I want to say something that's easy to overlook: the fact that **resume execution worked without changing the executor** is a strong indicator that your abstractions (`completed_steps`, `tool_results`, `context`, and the scheduler) are well chosen. Features that "fall out" of an existing design rather than requiring special-case code are often a sign that the architecture is on the right track.
+
+

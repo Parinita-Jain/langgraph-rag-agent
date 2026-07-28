@@ -163,6 +163,10 @@ def executor_node(state):
         if result["success"]
     }
 
+    logger.debug(
+        "Resuming with completed steps: %s",
+        sorted(completed_steps),
+    )
     state["context"] = state.get(
         "context",
         {},
