@@ -410,3 +410,59 @@ def test_resume_execution(mock_llm):
     # Only Step 2 should have executed during resume
     assert len(result["execution_records"]) == 1
 
+@patch("planner.get_structured_llm")
+def test_resume_after_partial_progress(mock_llm):
+
+    mock_llm.return_value = FakeLLMMultiStep()
+
+    # Simulate a workflow where Step 1 has already completed.
+    state = {
+        "messages": [
+            HumanMessage(content="Resume workflow.")
+        ],
+        "context": {
+            "step_1": {
+                "answer": "Hello Orion"
+            }
+        },
+        "tool_results": {
+            1: {
+                "messages": [
+                    AIMessage(content="Hello Orion")
+                ],
+                "output": {
+                    "answer": "Hello Orion"
+                },
+                "success": True,
+                "error": None,
+            }
+        },
+        "execution_records": [],
+    }
+
+    plan = planner_node(state)
+
+    assert plan["error"] is None
+
+    state["steps"] = plan["steps"]
+
+    result = executor_node(state)
+
+    # Existing result should remain untouched.
+    assert result["tool_results"][1]["success"] is True
+
+    # Remaining step should execute.
+    assert result["tool_results"][2]["success"] is True
+
+    assert (
+        result["tool_results"][2]["output"]["answer"]
+        == "Repeat: Hello Orion"
+    )
+
+    # Context should now contain both outputs.
+    assert "step_1" in result["context"]
+    assert "step_2" in result["context"]
+
+    # Only one new execution happened.
+    assert len(result["execution_records"]) == 1
+
