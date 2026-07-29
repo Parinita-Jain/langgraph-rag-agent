@@ -14,6 +14,8 @@ from utils import (
 from config import logger
 from runtime.retry import execute_with_retry
 
+from execution_summary import ExecutionSummary
+from step_status import StepStatus
 
 def execute_step(step, state, tool_results):
 
@@ -66,6 +68,11 @@ def execute_step(step, state, tool_results):
             tool_name=tool_name,
             max_retries=max_retries,
         )
+
+        if result["success"]:
+            result["status"] = StepStatus.SUCCESS
+        else:
+            result["status"] = StepStatus.FAILED
 
         if result["success"]:
             logger.info(
@@ -126,6 +133,7 @@ def execute_step(step, state, tool_results):
                 ],
                 "output": {},
                 "success": False,
+                "status": StepStatus.FAILED,
                 "error": str(e),
             },
             "record": record,
@@ -219,11 +227,11 @@ def executor_node(state):
                         ],
                         "output": {},
                         "success": False,
-                        "status": "SKIPPED",
+                        "status": StepStatus.SKIPPED,
                         "error": (
-                                f"Skipped because dependencies "
-                                f"{failed} failed."
-                            ),
+                            f"Skipped because dependencies "
+                            f"{failed} failed."
+                        ),
                     }
 
                     execution_records.append(
@@ -381,6 +389,31 @@ def executor_node(state):
         record.duration
         for record in execution_records
     )
+    success_count = sum(
+    1
+    for result in tool_results.values()
+    if result.get("status") == StepStatus.SUCCESS
+    )
+
+    failed_count = sum(
+        1
+        for result in tool_results.values()
+        if result.get("status") == StepStatus.FAILED
+    )
+
+    skipped_count = sum(
+        1
+        for result in tool_results.values()
+        if result.get("status") == StepStatus.SKIPPED
+    )
+
+    summary = ExecutionSummary(
+        total_steps=len(tool_results),
+        succeeded=success_count,
+        failed=failed_count,
+        skipped=skipped_count,
+        duration=total_time,
+    )
     
     logger.info(
         "Total execution time: %.3fs",
@@ -390,5 +423,6 @@ def executor_node(state):
     return {
         "tool_results": tool_results,
         "execution_records": execution_records,
+        "execution_summary": summary,
         "context": state["context"],
     }

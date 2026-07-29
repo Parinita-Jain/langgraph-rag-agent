@@ -15,7 +15,7 @@ from executor import (
     execute_step,
     executor_node,
 )
-
+from step_status import StepStatus
 def dummy_tool(state):
     return {
         "messages": [AIMessage(content="Done")],
@@ -612,4 +612,34 @@ def test_executor_node_dependency_not_executed_after_failure():
 
     assert result["tool_results"][1]["success"] is False
 
-    assert result["tool_results"][2]["status"] == "SKIPPED"
+    assert result["tool_results"][2]["status"] == StepStatus.SKIPPED
+
+def test_execution_summary_present():
+    register_tool(
+        Tool(
+            name="direct",
+            function=dummy_tool,
+            description="Direct tool",
+            outputs=["answer"],
+        )
+    )
+    state = {
+        "steps": [
+            PlanStep(
+                id=1,
+                tool="direct",
+                tool_input="Hello",
+                depends_on=[],
+            )
+        ],
+        "context": {},
+    }
+
+    result = executor_node(state)
+
+    summary = result["execution_summary"]
+
+    assert summary.total_steps == 1
+    assert summary.succeeded == 1
+    assert summary.failed == 0
+    assert summary.skipped == 0

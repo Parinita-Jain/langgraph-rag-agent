@@ -9,6 +9,7 @@ from planner import planner_node
 from executor import executor_node
 from registry import register_tool, clear_registry
 from schemas import PlannerOutput, PlanStep
+from step_status import StepStatus
 
 class FakeLLMSingleStep:
 
@@ -343,7 +344,7 @@ def test_failure_propagation(mock_llm):
     assert result["tool_results"][2]["error"] == "Intentional failure"
 
     # Step 3 should never execute
-    assert result["tool_results"][3]["status"] == "SKIPPED"
+    assert result["tool_results"][3]["status"] ==  StepStatus.SKIPPED
 
     assert "Skipped because dependencies" in result["tool_results"][3]["error"]
     assert "[2]" in result["tool_results"][3]["error"]

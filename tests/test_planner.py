@@ -14,6 +14,7 @@ from schemas import PlannerOutput, PlanStep
 
 from registry import clear_registry
 
+
 @pytest.fixture(autouse=True)
 def setup_tools():
 
@@ -70,30 +71,25 @@ def test_calculator_rule_with_spaces():
     assert result["steps"][0].tool == "calculator"
 
 
-def test_non_greeting_goes_to_llm(monkeypatch):
+def test_non_greeting_goes_to_llm():
 
     class FakeStructuredLLM:
 
         def invoke(self, prompt):
             raise RuntimeError("LLM called")
 
-    class FakeLLM:
+    with patch(
+        "planner.get_structured_llm",
+        return_value=FakeStructuredLLM(),
+    ):
 
-        def with_structured_output(self, schema):
-            return FakeStructuredLLM()
+        state = {
+            "messages": [
+                HumanMessage(content="Explain RAG")
+            ]
+        }
 
-    monkeypatch.setattr(
-        "planner_llm.llm",
-        FakeLLM(),
-    )
-
-    state = {
-        "messages": [
-            HumanMessage(content="Hello there")
-        ]
-    }
-
-    result = planner_node(state)
+        result = planner_node(state)
 
     assert result["steps"] == []
     assert result["error"] is not None
@@ -192,6 +188,12 @@ def test_planner_repairs_invalid_plan():
     assert result["steps"][0].tool == "llm"
     assert result["error"] is None
 
+    args = mock_repair.call_args.args
+    
+    assert args[0] == "Explain AI"    
+    assert args[1][0].tool == "unknown_tool"    
+    assert "Unknown tool" in args[2][0]
+
 def test_planner_repair_failure():
 
     invalid_plan = PlannerOutput(
@@ -284,3 +286,5 @@ def test_valid_multistep_llm_plan():
     assert result["steps"][1].tool_input == "Summarize #1.answer"
 
     assert result["error"] is None
+
+    
