@@ -17,6 +17,10 @@ from runtime.retry import execute_with_retry
 from execution_summary import ExecutionSummary
 from step_status import StepStatus
 
+from runtime.event import WorkflowEvent
+from runtime.event_bus import EventBus
+from runtime.event_types import WorkflowEventType
+
 def execute_step(step, state, tool_results):
 
     tool_name = step.tool
@@ -155,6 +159,15 @@ def executor_node(state):
 
     logger.info("Executor started")
 
+    event_bus = state.setdefault(
+        "event_bus",
+        EventBus(),
+    )
+    event_bus.emit(
+        WorkflowEvent(
+            type=WorkflowEventType.WORKFLOW_STARTED,
+        )
+    )
     execution_records = state.get(
         "execution_records",
         [],
@@ -225,14 +238,21 @@ def executor_node(state):
                                 )
                             )
                         ],
-                        "output": {},
-                        "success": False,
-                        "status": StepStatus.SKIPPED,
-                        "error": (
+                         "output": {},
+                         "success": False,
+                         "status": StepStatus.SKIPPED,
+                         "error": (
                             f"Skipped because dependencies "
                             f"{failed} failed."
                         ),
                     }
+                    event_bus.emit(
+                        WorkflowEvent(
+                            type=WorkflowEventType.STEP_SKIPPED,
+                            step_id=step.id,
+                            tool=step.tool,
+                        )
+                    )
 
                     execution_records.append(
                         ExecutionRecord(
@@ -278,7 +298,14 @@ def executor_node(state):
                 "Submitting step %d (%s)",
                 step.id,
                 step.tool,
-            )
+                )   
+                event_bus.emit(
+                    WorkflowEvent(
+                        type=WorkflowEventType.STEP_STARTED,
+                        step_id=step.id,
+                        tool=step.tool,
+                    )
+                )
 
                 future = executor.submit(
                     execute_step,
@@ -296,18 +323,39 @@ def executor_node(state):
                 try:
 
                     execution = future.result()
-
                     result = execution["result"]
-
+                    
                     record = execution["record"]
+                    if result["success"]:
+                        event_bus.emit(
+                            WorkflowEvent(
+                                type=WorkflowEventType.STEP_COMPLETED,
+                                step_id=step.id,
+                                tool=step.tool,
+                            )
+                        )
+                    else:
+                        event_bus.emit(
+                            WorkflowEvent(
+                                type=WorkflowEventType.STEP_FAILED,
+                                step_id=step.id,
+                                tool=step.tool,
+                            )
+                        )                  
 
                 except Exception as e:
-
+                    
                     logger.exception(
                         "Step %d execution failed",
                         step.id,
                     )
-
+                    event_bus.emit(
+                                    WorkflowEvent(
+                                                    type=WorkflowEventType.STEP_FAILED,
+                                                    step_id=step.id,
+                                                    tool=step.tool,
+                                                )
+                                )          
                     result = {
                         "messages": [
                             AIMessage(
@@ -419,6 +467,12 @@ def executor_node(state):
         "Total execution time: %.3fs",
         total_time,
                )
+
+    event_bus.emit(
+        WorkflowEvent(
+            type=WorkflowEventType.WORKFLOW_COMPLETED,
+        )
+    )
 
     return {
         "tool_results": tool_results,

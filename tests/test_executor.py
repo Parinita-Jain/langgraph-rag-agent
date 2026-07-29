@@ -16,6 +16,18 @@ from executor import (
     executor_node,
 )
 from step_status import StepStatus
+
+from runtime.event_bus import EventBus
+from runtime.event_types import WorkflowEventType
+
+
+class FakeListener:
+    def __init__(self):
+        self.events = []
+
+    def __call__(self, event):
+        self.events.append(event)
+
 def dummy_tool(state):
     return {
         "messages": [AIMessage(content="Done")],
@@ -643,3 +655,148 @@ def test_execution_summary_present():
     assert summary.succeeded == 1
     assert summary.failed == 0
     assert summary.skipped == 0
+
+def test_executor_emits_success_events():
+
+    register_tool(
+        Tool(
+            name="dummy",
+            function=dummy_tool,
+            description="Dummy tool",
+            outputs=["answer"],
+        )
+    )
+
+    listener = FakeListener()
+
+    bus = EventBus()
+    bus.subscribe(listener)
+
+    step = PlanStep(
+        id=1,
+        tool="dummy",
+        tool_input="Hello",
+        depends_on=[],
+    )
+
+    state = {
+        "steps": [step],
+        "context": {},
+        "tool_results": {},
+        "execution_records": [],
+        "event_bus": bus,
+    }
+
+    executor_node(state)
+
+    event_types = [
+        event.type
+        for event in listener.events
+    ]
+
+    assert event_types == [
+        WorkflowEventType.WORKFLOW_STARTED,
+        WorkflowEventType.STEP_STARTED,
+        WorkflowEventType.STEP_COMPLETED,
+        WorkflowEventType.WORKFLOW_COMPLETED,
+    ]
+
+def test_executor_emits_failed_event():
+
+    register_tool(
+        Tool(
+            name="fail",
+            function=failing_tool,
+            description="Always fails",
+            outputs=["answer"],
+        )
+    )
+
+    listener = FakeListener()
+
+    bus = EventBus()
+    bus.subscribe(listener)
+
+    step = PlanStep(
+        id=1,
+        tool="fail",
+        tool_input="Hello",
+        depends_on=[],
+    )
+
+    state = {
+        "steps": [step],
+        "context": {},
+        "tool_results": {},
+        "execution_records": [],
+        "event_bus": bus,
+    }
+
+    executor_node(state)
+
+    event_types = [
+        event.type
+        for event in listener.events
+    ]
+
+    assert event_types == [
+        WorkflowEventType.WORKFLOW_STARTED,
+        WorkflowEventType.STEP_STARTED,
+        WorkflowEventType.STEP_FAILED,
+        WorkflowEventType.WORKFLOW_COMPLETED,
+    ]
+
+def test_executor_emits_skipped_event():
+
+    register_tool(
+        Tool(
+            name="fail",
+            function=failing_tool,
+            description="Always fails",
+            outputs=["answer"],
+        )
+    )
+
+    register_tool(
+        Tool(
+            name="dummy",
+            function=dummy_tool,
+            description="Dummy tool",
+            outputs=["answer"],
+        )
+    )
+
+    listener = FakeListener()
+
+    bus = EventBus()
+    bus.subscribe(listener)
+
+    state = {
+        "steps": [
+            PlanStep(
+                id=1,
+                tool="fail",
+                tool_input="Fail",
+                depends_on=[],
+            ),
+            PlanStep(
+                id=2,
+                tool="dummy",
+                tool_input="Should not execute",
+                depends_on=[1],
+            ),
+        ],
+        "context": {},
+        "tool_results": {},
+        "execution_records": [],
+        "event_bus": bus,
+    }
+
+    executor_node(state)
+
+    event_types = [
+        event.type
+        for event in listener.events
+    ]
+
+    assert WorkflowEventType.STEP_SKIPPED in event_types

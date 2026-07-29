@@ -2,10 +2,25 @@ import tools
 
 from graph import app
 from langchain_core.messages import HumanMessage
+from runtime.event_bus import EventBus
+from runtime.listeners import ConsoleEventListener
+from runtime.logging_listener import LoggingEventListener
+from runtime.metrics_listener import MetricsListener
+from runtime.audit_listener import AuditListener
 
 conversation = []
 
 print("Type 'exit' to quit.\n")
+
+bus = EventBus()
+metrics = MetricsListener()
+audit = AuditListener()
+bus.subscribe(ConsoleEventListener())
+bus.subscribe(
+    LoggingEventListener()
+)
+bus.subscribe(metrics)
+bus.subscribe(audit)
 
 while True:
 
@@ -18,24 +33,33 @@ while True:
         HumanMessage(content=question)
     )
 
-    result = app.invoke(
-        {
-            "messages": conversation,
-            "steps": [],
-            "tool_results": {},
-            "execution_records": [],
-            "context": {},
-            "output": {},
-            "documents": [],
-            "tool_input": "",
-            "done": False,
-            "iteration": 0,
-            "errors": [],
-            "error": None,
-        }
-    )
+    state = {
+        "messages": conversation,
+        "steps": [],
+        "tool_results": {},
+        "execution_records": [],
+        "context": {},
+        "output": {},
+        "documents": [],
+        "tool_input": "",
+        "done": False,
+        "iteration": 0,
+        "errors": [],
+        "error": None,
+        "event_bus": bus,      # <-- Add this here
+    }
+    result = app.invoke(state)
+    print(metrics.snapshot())
+    for event in audit.history():
+        print(
+            event.timestamp,
+            event.type,
+            event.step_id,
+            event.tool,
+        )
     print(result)
     conversation = result["messages"]
+   
 
     print("\nAssistant:")
     print(conversation[-1].content)
