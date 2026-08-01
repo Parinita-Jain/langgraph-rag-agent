@@ -13,7 +13,7 @@ class Tool:
     outputs: list[str]
     parallel_safe: bool = True
     retries: int = 2
-    timeout: int = 30
+    timeout: int = 30.0
 
     def planner_description(self):
 

@@ -1,7 +1,6 @@
-from config import logger
 import time
-
-
+from config import logger
+from runtime.retry_error import RetryError
 def execute_with_retry(
     func,
     *args,
@@ -52,6 +51,9 @@ def execute_with_retry(
                 time.sleep(wait_time)
 
     if last_exception is not None:
-        raise last_exception
+        raise RetryError(
+            retries=max_retries,
+            original_exception=last_exception,
+        )
 
     raise RuntimeError("execute_with_retry failed without capturing an exception.")

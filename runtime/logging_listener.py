@@ -2,7 +2,7 @@ import logging
 
 from runtime.event import WorkflowEvent
 from runtime.event_types import WorkflowEventType
-
+from runtime.failure_reason import FailureReason
 
 logger = logging.getLogger(__name__)
 
@@ -34,15 +34,21 @@ class LoggingEventListener:
                 )
 
             case WorkflowEventType.STEP_FAILED:
-                logger.error(
-                    "Step %s failed (%s).",
-                    event.step_id,
-                    event.tool,
-                )
 
-            case WorkflowEventType.STEP_SKIPPED:
-                logger.warning(
-                    "Step %s skipped (%s).",
-                    event.step_id,
-                    event.tool,
-                )
+                reason = event.payload.get("reason")
+
+                if reason == FailureReason.TIMEOUT:
+
+                    logger.warning(
+                        "Step %s timed out (%s).",
+                        event.step_id,
+                        event.tool,
+                    )
+
+                else:
+
+                    logger.error(
+                        "Step %s failed (%s).",
+                        event.step_id,
+                        event.tool,
+                    )

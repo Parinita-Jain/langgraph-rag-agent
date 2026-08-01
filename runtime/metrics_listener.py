@@ -1,6 +1,6 @@
 from runtime.event import WorkflowEvent
 from runtime.event_types import WorkflowEventType
-
+from runtime.failure_reason import FailureReason
 
 class MetricsListener:
 
@@ -13,6 +13,7 @@ class MetricsListener:
         self.steps_completed = 0
         self.steps_failed = 0
         self.steps_skipped = 0
+        self.step_timeouts = 0
 
     def __call__(self, event: WorkflowEvent):
 
@@ -30,11 +31,17 @@ class MetricsListener:
             case WorkflowEventType.STEP_COMPLETED:
                 self.steps_completed += 1
 
-            case WorkflowEventType.STEP_FAILED:
-                self.steps_failed += 1
-
             case WorkflowEventType.STEP_SKIPPED:
                 self.steps_skipped += 1
+
+            case WorkflowEventType.STEP_FAILED:
+
+                reason = event.payload.get("reason")
+
+                self.steps_failed += 1
+
+                if reason == FailureReason.TIMEOUT:
+                    self.step_timeouts += 1
 
     def snapshot(self):
 
@@ -45,4 +52,5 @@ class MetricsListener:
             "steps_completed": self.steps_completed,
             "steps_failed": self.steps_failed,
             "steps_skipped": self.steps_skipped,
+            "step_timeouts": self.step_timeouts,
         }

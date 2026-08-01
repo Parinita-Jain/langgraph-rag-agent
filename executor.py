@@ -21,6 +21,12 @@ from runtime.event import WorkflowEvent
 from runtime.event_bus import EventBus
 from runtime.event_types import WorkflowEventType
 
+from runtime.timeout import run_with_timeout
+from concurrent.futures import TimeoutError
+
+from runtime.failure_reason import FailureReason
+from runtime.retry_error import RetryError
+
 def execute_step(step, state, tool_results):
 
     tool_name = step.tool
@@ -51,9 +57,8 @@ def execute_step(step, state, tool_results):
     )
 
     max_retries = tool.retries
-
-    # TODO: Implement timeout handling.
-    # timeout = tool.timeout
+ 
+    timeout = getattr(tool, "timeout", None)
 
     tool_function = tool.function
 
@@ -66,13 +71,25 @@ def execute_step(step, state, tool_results):
 
     try:
 
-        result = execute_with_retry(
-            tool_function,
-            tool_state,
-            tool_name=tool_name,
-            max_retries=max_retries,
-        )
+        if timeout is None:
 
+            result = execute_with_retry(
+                tool_function,
+                tool_state,
+                tool_name=tool_name,
+                max_retries=max_retries,
+            )
+
+        else:
+
+            result = run_with_timeout(
+                execute_with_retry,
+                tool_function,
+                tool_state,
+                tool_name=tool_name,
+                max_retries=max_retries,
+                timeout=timeout,
+            )
         if result["success"]:
             result["status"] = StepStatus.SUCCESS
         else:
@@ -110,8 +127,51 @@ def execute_step(step, state, tool_results):
             "record": record,
         }
         
+    
+    except TimeoutError as e:
+
+            end_time = time.perf_counter()
+
+            duration = end_time - start_time
+
+            record = ExecutionRecord(
+                step_id=step.id,
+                tool=tool_name,
+                success=False,
+                retries=max_retries,
+                start_time=start_time,
+                end_time=end_time,
+                duration=duration,
+                error=str(e),
+            )
+
+            return {
+                "result": {
+                    "messages": [
+                        AIMessage(
+                            content="Tool execution timed out."
+                        )
+                    ],
+                    "output": {},
+                    "success": False,
+                    "status": StepStatus.FAILED,
+                    "failure_reason": FailureReason.TIMEOUT,
+                    "error": str(e),
+                },
+                "record": record,
+            }
+    
 
     except Exception as e:
+
+        if isinstance(e, RetryError):
+            retries = e.retries
+            error = str(e.original_exception)
+            failure_reason = FailureReason.EXCEPTION
+        else:
+            retries = 0
+            error = str(e)
+            failure_reason = FailureReason.EXCEPTION
 
         end_time = time.perf_counter()
 
@@ -121,11 +181,11 @@ def execute_step(step, state, tool_results):
             step_id=step.id,
             tool=tool_name,
             success=False,
-            retries=max_retries,
+            retries=retries,
             start_time=start_time,
             end_time=end_time,
             duration=duration,
-            error=str(e),
+            error=error
         )
 
         return {
@@ -138,10 +198,13 @@ def execute_step(step, state, tool_results):
                 "output": {},
                 "success": False,
                 "status": StepStatus.FAILED,
-                "error": str(e),
+                "failure_reason": FailureReason.EXCEPTION,
+                "error": error,
             },
             "record": record,
         }
+
+    
 
 def failed_dependencies(step, tool_results):
     """
@@ -327,6 +390,7 @@ def executor_node(state):
                     
                     record = execution["record"]
                     if result["success"]:
+
                         event_bus.emit(
                             WorkflowEvent(
                                 type=WorkflowEventType.STEP_COMPLETED,
@@ -334,12 +398,23 @@ def executor_node(state):
                                 tool=step.tool,
                             )
                         )
+
                     else:
+
+                        reason = result.get(
+                            "failure_reason",
+                            FailureReason.EXCEPTION,
+                        )
+                        
+
                         event_bus.emit(
                             WorkflowEvent(
                                 type=WorkflowEventType.STEP_FAILED,
                                 step_id=step.id,
                                 tool=step.tool,
+                                payload={
+                                    "reason": reason,
+                                },
                             )
                         )                  
 
@@ -364,6 +439,8 @@ def executor_node(state):
                         ],
                         "output": {},
                         "success": False,
+                        "status": StepStatus.FAILED,
+                        "failure_reason": FailureReason.EXCEPTION,
                         "error": str(e),
                     }
 
@@ -406,10 +483,17 @@ def executor_node(state):
                 if step in pending_steps:
                     pending_steps.remove(step)
 
-                logger.info(
-                    "Completed step %d",
-                    step.id,
-                )
+                if result["success"]:
+                    logger.info(
+                        "Completed step %d",
+                        step.id,
+                    )
+                else:
+                    logger.info(
+                        "Step %d finished with status %s",
+                        step.id,
+                        result["status"],
+                    )
 
                 logger.debug(
                     "Context updated after step %d: %s",

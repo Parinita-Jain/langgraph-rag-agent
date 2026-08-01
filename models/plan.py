@@ -12,6 +12,7 @@ class PlanStep:
     tool_input: str
     depends_on: list[int] = field(default_factory=list)
     output: str | None = None
+    timeout: float | None = None
 
 
 @dataclass

@@ -19,7 +19,7 @@ from step_status import StepStatus
 
 from runtime.event_bus import EventBus
 from runtime.event_types import WorkflowEventType
-
+from runtime.failure_reason import FailureReason
 
 class FakeListener:
     def __init__(self):
@@ -746,6 +746,10 @@ def test_executor_emits_failed_event():
         WorkflowEventType.WORKFLOW_COMPLETED,
     ]
 
+    failed_event = listener.events[2]
+
+    assert failed_event.payload["reason"] == FailureReason.EXCEPTION
+
 def test_executor_emits_skipped_event():
 
     register_tool(
@@ -800,3 +804,170 @@ def test_executor_emits_skipped_event():
     ]
 
     assert WorkflowEventType.STEP_SKIPPED in event_types
+
+import time
+
+from planner import PlanStep
+from registry import register_tool
+from executor import executor_node
+from step_status import StepStatus
+
+
+def slow_tool(state):
+    time.sleep(2)
+
+    return {
+        "messages": [],
+        "output": {
+            "value": 123,
+        },
+        "success": True,
+    }
+
+
+def test_executor_timeout():
+
+    register_tool(
+            Tool(
+                name="slow_tool",
+                function=slow_tool,
+                description="Slow tool",
+                outputs=["value"],
+                timeout=0.1,
+            )
+        )
+
+    state = {
+        "steps": [
+            PlanStep(
+                id=1,
+                tool="slow_tool",
+                tool_input="",
+                depends_on=[],
+                output="result",
+            )
+        ],
+        "context": {},
+    }
+
+    result = executor_node(state)
+
+    tool_result = result["tool_results"][1]
+    
+    assert tool_result["success"] is False
+    assert tool_result["status"] == StepStatus.FAILED
+    assert "timed out" in tool_result["error"].lower() \
+        or "exceeded timeout" in tool_result["error"].lower()
+
+def test_executor_emits_timeout_reason():
+
+    register_tool(
+        Tool(
+            name="slow_tool",
+            function=slow_tool,
+            description="Slow tool",
+            outputs=["value"],
+            timeout=0.1,
+        )
+    )
+
+    listener = FakeListener()
+
+    bus = EventBus()
+    bus.subscribe(listener)
+
+    state = {
+        "steps": [
+            PlanStep(
+                id=1,
+                tool="slow_tool",
+                tool_input="",
+                depends_on=[],
+            )
+        ],
+        "context": {},
+        "event_bus": bus,
+    }
+
+    executor_node(state)
+
+    failed_event = listener.events[2]
+
+    assert failed_event.type == WorkflowEventType.STEP_FAILED
+    assert failed_event.payload["reason"] == FailureReason.TIMEOUT
+
+def fast_tool(state):
+
+    return {
+        "messages": [],
+        "output": {
+            "value": 123,
+        },
+        "success": True,
+    }
+
+
+def test_executor_timeout_success():
+
+    register_tool(
+        Tool(
+            name="fast_tool",
+            function=fast_tool,
+            description="Fast tool",
+            outputs=["value"],
+            timeout=5,
+        )
+    )
+
+    state = {
+        "steps": [
+            PlanStep(
+                id=1,
+                tool="fast_tool",
+                tool_input="",
+                depends_on=[],
+                output="result",
+            )
+        ],
+        "context": {},
+    }
+
+    result = executor_node(state)
+
+    tool_result = result["tool_results"][1]
+
+    assert tool_result["success"] is True
+    assert tool_result["status"] == StepStatus.SUCCESS
+
+def test_timeout_creates_execution_record():
+
+    register_tool(
+        Tool(
+            name="slow_tool_record",
+            function=slow_tool,
+            description="Slow tool",
+            outputs=["value"],
+            timeout=0.1,
+        )
+    )
+
+    state = {
+        "steps": [
+            PlanStep(
+                id=1,
+                tool="slow_tool_record",
+                tool_input="",
+                depends_on=[],
+                output="result",
+            )
+        ],
+        "context": {},
+    }
+
+    result = executor_node(state)
+
+    record = result["execution_records"][0]
+
+    assert record.success is False
+    assert record.duration > 0
+    assert "timed out" in record.error.lower()

@@ -1,8 +1,8 @@
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, call
 
 from runtime.retry import execute_with_retry
-
+from runtime.retry_error import RetryError
 
 def test_execute_success_first_attempt():
 
@@ -55,13 +55,20 @@ def test_execute_failure_after_max_retries():
 
     with patch("runtime.retry.time.sleep"):
 
-        with pytest.raises(ValueError, match="Permanent failure"):
+        with pytest.raises(RetryError) as exc:
 
             execute_with_retry(
                 always_fail,
                 tool_name="dummy",
-                max_retries=2,
+                max_retries=3,
             )
+
+        assert isinstance(
+            exc.value.original_exception,
+            ValueError,
+        )
+
+        assert exc.value.retries == 3
 
 
 def test_exponential_backoff():
@@ -71,7 +78,7 @@ def test_exponential_backoff():
 
     with patch("runtime.retry.time.sleep") as mock_sleep:
 
-        with pytest.raises(RuntimeError):
+        with pytest.raises(RetryError) as exc:
 
             execute_with_retry(
                 always_fail,
@@ -79,8 +86,17 @@ def test_exponential_backoff():
                 max_retries=3,
             )
 
-        assert mock_sleep.call_args_list == [
-            ((1,),),
-            ((2,),),
-            ((4,),),
-        ]
+        assert isinstance(
+            exc.value.original_exception,
+            RuntimeError,
+        )
+
+        assert exc.value.retries == 3
+
+        mock_sleep.assert_has_calls(
+            [
+                call(1),
+                call(2),
+                call(4),
+            ]
+        )
