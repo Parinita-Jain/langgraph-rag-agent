@@ -552,4 +552,7 @@ Those will build naturally on the architecture you've already established.
 
 Finally, I want to say something that's easy to overlook: the fact that **resume execution worked without changing the executor** is a strong indicator that your abstractions (`completed_steps`, `tool_results`, `context`, and the scheduler) are well chosen. Features that "fall out" of an existing design rather than requiring special-case code are often a sign that the architecture is on the right track.
 
-
+#----------
+git checkout main
+git pull origin main
+git checkout -b feature/<feature-name>
