@@ -11,6 +11,23 @@ from registry import register_tool, clear_registry
 from schemas import PlannerOutput, PlanStep
 from step_status import StepStatus
 
+from runtime.runtime_config import RuntimeConfig
+
+
+def make_state(**overrides):
+
+    state = {
+        "messages": [],
+        "context": {},
+        "tool_results": {},
+        "execution_records": [],
+        "runtime_config": RuntimeConfig(),
+    }
+
+    state.update(overrides)
+
+    return state
+
 class FakeLLMSingleStep:
 
     def invoke(self, prompt):
@@ -185,14 +202,11 @@ def test_planner_executor_integration(mock_llm):
 
     mock_llm.return_value = FakeLLMSingleStep()
 
-    state = {
-        "messages": [
+    state = make_state(
+        messages=[
             HumanMessage(content="Say hello")
-        ],
-        "context": {},
-        "tool_results": {},
-        "execution_records": []
-    }
+        ]
+    )
 
     plan = planner_node(state)
 
@@ -214,16 +228,13 @@ def test_sequential_workflow_integration(mock_llm):
 
     mock_llm.return_value = FakeLLMMultiStep()
 
-    state = {
-        "messages": [
+    state = make_state(
+        messages=[
             HumanMessage(
                 content="Say hello and then repeat it."
             )
-        ],
-        "context": {},
-        "tool_results": {},
-        "execution_records": [],
-    }
+        ]
+    )
 
     plan = planner_node(state)
 
@@ -265,16 +276,13 @@ def test_parallel_workflow_integration(mock_llm):
 
     mock_llm.return_value = FakeLLMParallel()
 
-    state = {
-        "messages": [
+    state = make_state(
+        messages=[
             HumanMessage(
                 content="Tell me Apple and Banana, then combine them."
             )
-        ],
-        "context": {},
-        "tool_results": {},
-        "execution_records": [],
-    }
+        ]
+    )
 
     plan = planner_node(state)
 
@@ -315,16 +323,13 @@ def test_failure_propagation(mock_llm):
 
     mock_llm.return_value = FakeLLMFailure()
 
-    state = {
-        "messages": [
+    state = make_state(
+        messages=[
             HumanMessage(
                 content="Run a workflow that fails."
             )
-        ],
-        "context": {},
-        "tool_results": {},
-        "execution_records": [],
-    }
+        ]
+    )
 
     plan = planner_node(state)
 
@@ -359,18 +364,16 @@ def test_resume_execution(mock_llm):
 
     mock_llm.return_value = FakeLLMMultiStep()
 
-    state = {
-        "messages": [
-            HumanMessage(
-                content="Resume workflow."
-            )
+    state = make_state(
+        messages=[
+            HumanMessage(content="Resume workflow.")
         ],
-        "context": {
+        context={
             "step_1": {
                 "answer": "Hello Orion"
             }
         },
-        "tool_results": {
+        tool_results={
             1: {
                 "messages": [
                     AIMessage(content="Hello Orion")
@@ -382,8 +385,7 @@ def test_resume_execution(mock_llm):
                 "error": None,
             }
         },
-        "execution_records": [],
-    }
+    )
 
     plan = planner_node(state)
 
@@ -417,16 +419,18 @@ def test_resume_after_partial_progress(mock_llm):
     mock_llm.return_value = FakeLLMMultiStep()
 
     # Simulate a workflow where Step 1 has already completed.
-    state = {
-        "messages": [
-            HumanMessage(content="Resume workflow.")
+    state = make_state(
+        messages=[
+            HumanMessage(
+                content="Resume workflow."
+            )
         ],
-        "context": {
+        context={
             "step_1": {
                 "answer": "Hello Orion"
             }
         },
-        "tool_results": {
+        tool_results={
             1: {
                 "messages": [
                     AIMessage(content="Hello Orion")
@@ -438,8 +442,7 @@ def test_resume_after_partial_progress(mock_llm):
                 "error": None,
             }
         },
-        "execution_records": [],
-    }
+    )
 
     plan = planner_node(state)
 
