@@ -56,9 +56,19 @@ def execute_step(step, state, tool_results):
         f"Tool '{tool_name}' is not registered."
     )
 
-    max_retries = tool.retries
- 
-    timeout = getattr(tool, "timeout", None)
+    config = state["runtime_config"]
+
+    max_retries = (
+        tool.retries
+        if tool.retries is not None
+        else config.default_retries
+    )
+
+    timeout = (
+        tool.timeout
+        if tool.timeout is not None
+        else config.default_timeout
+    )
 
     tool_function = tool.function
 

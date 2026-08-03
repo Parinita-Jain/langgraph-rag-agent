@@ -12,8 +12,8 @@ class Tool:
     description: str
     outputs: list[str]
     parallel_safe: bool = True
-    retries: int = 2
-    timeout: int = 30.0
+    retries: int | None = None
+    timeout: float | None = None
 
     def planner_description(self):
 
