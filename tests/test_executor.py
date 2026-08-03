@@ -21,6 +21,24 @@ from runtime.event_bus import EventBus
 from runtime.event_types import WorkflowEventType
 from runtime.failure_reason import FailureReason
 
+from runtime.runtime_config import RuntimeConfig
+
+
+def make_state(**overrides):
+
+    state = {
+        "steps": [],
+        "context": {},
+        "tool_results": {},
+        "execution_records": [],
+        "runtime_config": RuntimeConfig(),
+        "event_bus": EventBus(),
+    }
+
+    state.update(overrides)
+
+    return state
+
 class FakeListener:
     def __init__(self):
         self.events = []
@@ -77,9 +95,7 @@ def test_execute_step_success():
         depends_on=[],
     )
 
-    state = {
-        "context": {},
-    }
+    state = make_state()
 
     result = execute_step(
         step,
@@ -107,9 +123,7 @@ def test_execute_step_unknown_tool():
         depends_on=[],
     )
 
-    state = {
-        "context": {},
-    }
+    state = make_state()
 
     with pytest.raises(ValueError) as exc:
         execute_step(
@@ -138,9 +152,7 @@ def test_execute_step_tool_without_function():
         depends_on=[],
     )
 
-    state = {
-        "context": {},
-    }
+    state = make_state()
 
     with pytest.raises(ValueError) as exc:
         execute_step(
@@ -169,11 +181,8 @@ def test_execute_step_resolves_context_variables():
         depends_on=[],
     )
 
-    state = {
-        "context": {
-            "city": "Mumbai",
-        },
-    }
+    state = make_state(
+        context= {"city": "Mumbai"},)
 
     result = execute_step(
         step,
@@ -205,9 +214,7 @@ def test_execute_step_tool_failure():
         depends_on=[],
     )
 
-    state = {
-        "context": {},
-    }
+    state =make_state() 
 
     result = execute_step(
         step,
@@ -279,11 +286,7 @@ def test_execute_step_resolves_step_references():
 
 
 
-    state = {
-
-        "context": {},
-
-    }
+    state = make_state()
 
 
 
@@ -312,18 +315,8 @@ def test_execute_step_resolves_step_references():
 def test_executor_node_empty_plan():
 
 
-
-    state = {
-
-        "steps": [],
-
-        "context": {},
-
-        "tool_results": {},
-
-        "execution_records": [],
-
-    }
+    
+    state = make_state()
 
 
 
@@ -376,18 +369,10 @@ def test_executor_node_single_step():
     )
 
 
-
-    state = {
-
-        "steps": [step],
-
-        "context": {},
-
-        "tool_results": {},
-
-        "execution_records": [],
-
-    }
+    
+    state = make_state(
+                steps=[step],
+            )
 
 
 
@@ -467,12 +452,7 @@ def test_executor_node_sequential_steps():
         depends_on=[1],
     )
 
-    state = {
-        "steps": [step1, step2],
-        "context": {},
-        "tool_results": {},
-        "execution_records": [],
-    }
+    state = make_state(steps=[step1, step2])
 
     result = executor_node(state)
 
@@ -516,12 +496,10 @@ def test_executor_node_parallel_steps():
         depends_on=[],
     )
 
-    state = {
-        "steps": [step1, step2],
-        "context": {},
-        "tool_results": {},
-        "execution_records": [],
-    }
+    state = make_state(
+        steps = [step1, step2],
+        )
+        
 
     result = executor_node(state)
 
@@ -557,10 +535,10 @@ def test_executor_node_skips_completed_steps():
         depends_on=[1],
     )
 
-    state = {
-        "steps": [step1, step2],
-        "context": {},
-        "tool_results": {
+    state = make_state(
+        steps= [step1, step2],
+        
+        tool_results= {
             1: {
                 "messages": [],
                 "output": {
@@ -570,8 +548,8 @@ def test_executor_node_skips_completed_steps():
                 "error": None,
             }
         },
-        "execution_records": [],
-    }
+    )
+    
 
     result = executor_node(state)
 
@@ -613,12 +591,9 @@ def test_executor_node_dependency_not_executed_after_failure():
         depends_on=[1],
     )
 
-    state = {
-        "steps": [step1, step2],
-        "context": {},
-        "tool_results": {},
-        "execution_records": [],
-    }
+    state = make_state(
+        steps= [step1, step2],
+        )
 
     result = executor_node(state)
 
@@ -635,8 +610,8 @@ def test_execution_summary_present():
             outputs=["answer"],
         )
     )
-    state = {
-        "steps": [
+    state = make_state(
+        steps= [
             PlanStep(
                 id=1,
                 tool="direct",
@@ -644,8 +619,8 @@ def test_execution_summary_present():
                 depends_on=[],
             )
         ],
-        "context": {},
-    }
+        
+    )
 
     result = executor_node(state)
 
@@ -679,13 +654,10 @@ def test_executor_emits_success_events():
         depends_on=[],
     )
 
-    state = {
-        "steps": [step],
-        "context": {},
-        "tool_results": {},
-        "execution_records": [],
-        "event_bus": bus,
-    }
+    state = make_state(
+        steps= [step],        
+        event_bus= bus,
+    )
 
     executor_node(state)
 
@@ -724,13 +696,11 @@ def test_executor_emits_failed_event():
         depends_on=[],
     )
 
-    state = {
-        "steps": [step],
-        "context": {},
-        "tool_results": {},
-        "execution_records": [],
-        "event_bus": bus,
-    }
+    state = make_state(
+        steps= [step],
+        
+        event_bus= bus,
+    )
 
     executor_node(state)
 
@@ -775,8 +745,8 @@ def test_executor_emits_skipped_event():
     bus = EventBus()
     bus.subscribe(listener)
 
-    state = {
-        "steps": [
+    state = make_state(
+        steps= [
             PlanStep(
                 id=1,
                 tool="fail",
@@ -790,11 +760,9 @@ def test_executor_emits_skipped_event():
                 depends_on=[1],
             ),
         ],
-        "context": {},
-        "tool_results": {},
-        "execution_records": [],
-        "event_bus": bus,
-    }
+        
+        event_bus= bus,
+    )
 
     executor_node(state)
 
@@ -837,8 +805,8 @@ def test_executor_timeout():
             )
         )
 
-    state = {
-        "steps": [
+    state = make_state(
+        steps= [
             PlanStep(
                 id=1,
                 tool="slow_tool",
@@ -847,8 +815,8 @@ def test_executor_timeout():
                 output="result",
             )
         ],
-        "context": {},
-    }
+        
+    )
 
     result = executor_node(state)
 
@@ -876,8 +844,8 @@ def test_executor_emits_timeout_reason():
     bus = EventBus()
     bus.subscribe(listener)
 
-    state = {
-        "steps": [
+    state = make_state(
+        steps= [
             PlanStep(
                 id=1,
                 tool="slow_tool",
@@ -885,9 +853,9 @@ def test_executor_emits_timeout_reason():
                 depends_on=[],
             )
         ],
-        "context": {},
-        "event_bus": bus,
-    }
+        
+        event_bus= bus,
+    )
 
     executor_node(state)
 
@@ -919,8 +887,8 @@ def test_executor_timeout_success():
         )
     )
 
-    state = {
-        "steps": [
+    state = make_state(
+        steps= [
             PlanStep(
                 id=1,
                 tool="fast_tool",
@@ -929,8 +897,8 @@ def test_executor_timeout_success():
                 output="result",
             )
         ],
-        "context": {},
-    }
+        
+    )
 
     result = executor_node(state)
 
@@ -951,8 +919,8 @@ def test_timeout_creates_execution_record():
         )
     )
 
-    state = {
-        "steps": [
+    state = make_state(
+        steps= [
             PlanStep(
                 id=1,
                 tool="slow_tool_record",
@@ -961,8 +929,8 @@ def test_timeout_creates_execution_record():
                 output="result",
             )
         ],
-        "context": {},
-    }
+        
+    )
 
     result = executor_node(state)
 

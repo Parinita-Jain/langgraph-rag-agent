@@ -7,6 +7,7 @@ from runtime.listeners import ConsoleEventListener
 from runtime.logging_listener import LoggingEventListener
 from runtime.metrics_listener import MetricsListener
 from runtime.audit_listener import AuditListener
+from runtime.runtime_config import RuntimeConfig
 
 conversation = []
 

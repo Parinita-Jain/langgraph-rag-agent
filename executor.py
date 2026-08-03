@@ -221,6 +221,7 @@ def failed_dependencies(step, tool_results):
 def executor_node(state):
 
     logger.info("Executor started")
+    config = state["runtime_config"]
 
     event_bus = state.setdefault(
         "event_bus",
@@ -351,7 +352,9 @@ def executor_node(state):
         logger.debug("Ready steps: %s", ready_steps)
                    
 
-        with ThreadPoolExecutor() as executor:
+        with ThreadPoolExecutor(
+            max_workers=config.max_parallel_workers,
+            ) as executor:
 
             futures = {}
 
