@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-
+from runtime.approval_request import ApprovalRequest
 
 @dataclass
 class PlanStep:
@@ -12,7 +12,9 @@ class PlanStep:
     tool_input: str
     depends_on: list[int] = field(default_factory=list)
     output: str | None = None
+    
     timeout: float | None = None
+    approval: ApprovalRequest | None = None
 
 
 @dataclass

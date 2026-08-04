@@ -218,18 +218,29 @@ def execute_step(step, state, tool_results):
 
 def failed_dependencies(step, tool_results):
     """
-    Returns a list of failed dependency IDs.
+    Returns a list of dependency IDs that truly failed.
     """
 
-    return [
-        dep
-        for dep in step.depends_on
-        if dep in tool_results
-        and not tool_results[dep]["success"]
-    ]
+    failed = []
+
+    for dep in step.depends_on:
+
+        result = tool_results.get(dep)
+
+        if result is None:
+            continue
+
+        if result["status"] in (
+            StepStatus.FAILED,
+            StepStatus.SKIPPED,
+        ):
+            failed.append(dep)
+
+    return failed
 
 def executor_node(state):
 
+    approval_request = None
     logger.info("Executor started")
     config = state["runtime_config"]
 
@@ -282,6 +293,8 @@ def executor_node(state):
         )
 
         if not ready_steps:
+
+            print("tool_results =", tool_results)
 
             blocked_steps = [
                 step
@@ -348,6 +361,23 @@ def executor_node(state):
 
                 continue
 
+            waiting_for_approval = any(
+                any(
+                    tool_results.get(dep, {}).get("status")
+                    == StepStatus.WAITING_FOR_APPROVAL
+                    for dep in step.depends_on
+                )
+                for step in pending_steps
+            )
+
+            if waiting_for_approval:
+
+                logger.info(
+                    "Workflow paused waiting for approval."
+                )
+
+                break
+
             raise ValueError(
                 f"No executable step found.\n"
                 f"Completed: {completed_steps}\n"
@@ -382,6 +412,22 @@ def executor_node(state):
                         tool=step.tool,
                     )
                 )
+
+                if step.approval is not None:
+
+                    approval_request = step.approval
+
+                    tool_results[step.id] = {
+                        "messages": [],
+                        "output": {},
+                        "success": False,
+                        "status": StepStatus.WAITING_FOR_APPROVAL,
+                        "error": None,
+                    }
+
+                    pending_steps.remove(step)
+
+                    continue
 
                 future = executor.submit(
                     execute_step,
@@ -576,4 +622,5 @@ def executor_node(state):
         "execution_records": execution_records,
         "execution_summary": summary,
         "context": state["context"],
+        "approval_request": approval_request,
     }

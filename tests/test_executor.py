@@ -1,9 +1,16 @@
 import pytest
+import models.plan
 
 from langchain_core.messages import AIMessage
 
+from models.plan import PlanStep
 
-from models import PlanStep
+print(PlanStep)
+print(PlanStep.__module__)
+print(models.plan.PlanStep)
+
+
+import time
 
 from registry import (
     Tool,
@@ -22,6 +29,7 @@ from runtime.event_types import WorkflowEventType
 from runtime.failure_reason import FailureReason
 
 from runtime.runtime_config import RuntimeConfig
+from runtime.approval_request import ApprovalRequest
 
 
 def make_state(**overrides):
@@ -773,14 +781,6 @@ def test_executor_emits_skipped_event():
 
     assert WorkflowEventType.STEP_SKIPPED in event_types
 
-import time
-
-from planner import PlanStep
-from registry import register_tool
-from executor import executor_node
-from step_status import StepStatus
-
-
 def slow_tool(state):
     time.sleep(2)
 
@@ -939,3 +939,156 @@ def test_timeout_creates_execution_record():
     assert record.success is False
     assert record.duration > 0
     assert "timed out" in record.error.lower()
+
+def test_executor_waits_for_approval():
+
+    register_tool(
+        Tool(
+            name="approval_tool",
+            function=echo_tool,
+            description="Approval tool",
+            outputs=["answer"],
+        )
+    )
+
+    step = PlanStep(
+        id=1,
+        tool="approval_tool",
+        tool_input="",
+        depends_on=[],
+        output="answer",
+        approval=ApprovalRequest(
+            step_id=1,
+            tool="approval_tool",
+            reason="Requires manual approval",
+        ),
+    )
+
+    state = make_state(
+        steps=[step],
+    )
+    print(type(step))
+    print(type(state["steps"][0]))
+    result = executor_node(state)
+
+    assert (
+        result["tool_results"][1]["status"]
+        == StepStatus.WAITING_FOR_APPROVAL
+    )
+    assert result["approval_request"] == step.approval
+
+def test_executor_does_not_execute_step_waiting_for_approval():
+
+    executed = {
+        "called": False,
+    }
+
+    def approval_tool(state):
+
+        executed["called"] = True
+
+        return {
+            "messages": [],
+            "output": {
+                "answer": "Executed",
+            },
+            "success": True,
+            "error": None,
+        }
+
+    register_tool(
+        Tool(
+            name="approval_tool",
+            function=approval_tool,
+            description="Approval tool",
+            outputs=["answer"],
+        )
+    )
+
+    step = PlanStep(
+        id=1,
+        tool="approval_tool",
+        tool_input="",
+        depends_on=[],
+        output="answer",
+        approval=ApprovalRequest(
+            step_id=1,
+            tool="approval_tool",
+            reason="Requires manual approval",
+        ),
+    )
+
+    state = make_state(
+        steps=[step],
+    )
+
+    executor_node(state)
+
+    assert executed["called"] is False
+
+def test_executor_continues_independent_steps_while_waiting_for_approval():
+
+    register_tool(
+        Tool(
+            name="approval_tool",
+            function=echo_tool,
+            description="Approval tool",
+            outputs=["answer"],
+        )
+    )
+
+    register_tool(
+        Tool(
+            name="independent_tool",
+            function=echo_tool,
+            description="Independent tool",
+            outputs=["answer"],
+        )
+    )
+
+    step1 = PlanStep(
+        id=1,
+        tool="approval_tool",
+        tool_input="",
+        depends_on=[],
+        output="approval_output",
+        approval=ApprovalRequest(
+            step_id=1,
+            tool="approval_tool",
+            reason="Requires manual approval",
+        ),
+    )
+
+    step2 = PlanStep(
+        id=2,
+        tool="echo_tool",
+        tool_input="",
+        depends_on=[1],
+        output="dependent_output",
+    )
+
+    step3 = PlanStep(
+        id=3,
+        tool="independent_tool",
+        tool_input="",
+        depends_on=[],
+        output="independent_output",
+    )
+
+    state = make_state(
+        steps=[step1, step2, step3],
+    )
+
+    result = executor_node(state)
+
+    assert (
+        result["tool_results"][1]["status"]
+        == StepStatus.WAITING_FOR_APPROVAL
+    )
+
+    assert (
+        result["tool_results"][3]["status"]
+        == StepStatus.SUCCESS
+    )
+
+    assert 2 not in result["tool_results"]

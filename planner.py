@@ -8,6 +8,15 @@ from errors import OrionError, ErrorType
 from config import logger
 from planner_llm import get_structured_llm
 from planner_repair import repair_plan
+from schemas import (
+    PlannerOutput,
+    PlanStep as PlannerStep,
+)
+
+from models.plan import (
+    PlanStep as RuntimePlanStep,
+)
+
 MAX_REPAIR_ATTEMPTS = 3
 
 # ===========================
@@ -294,16 +303,28 @@ def planner_node(state):
                 "Planner could not repair the plan.\n\n"
                 + "\n".join(errors)
             )
+    runtime_steps = [
+        RuntimePlanStep(
+            id=step.id,
+            tool=step.tool,
+            tool_input=step.tool_input,
+            depends_on=step.depends_on,
+            output=step.output,
+            timeout=None,
+            approval=None,
+        )
+        for step in result.steps
+    ]
+
     logger.info(
         "Planner generated %d execution steps",
-        len(result.steps),
+        len(runtime_steps),
     )
-    logger.debug("Execution plan: %s", result.steps)
+    logger.debug("Execution plan: %s", runtime_steps)
 
-    
     return {
-        "steps": result.steps,
-        "error":None
+        "steps": runtime_steps,
+        "error": None,
     }
 
 #-------------
