@@ -30,6 +30,7 @@ from runtime.failure_reason import FailureReason
 
 from runtime.runtime_config import RuntimeConfig
 from runtime.approval_request import ApprovalRequest
+from runtime.approval_decision import ApprovalDecision
 
 
 def make_state(**overrides):
@@ -1092,3 +1093,144 @@ def test_executor_continues_independent_steps_while_waiting_for_approval():
     )
 
     assert 2 not in result["tool_results"]
+
+
+def test_resume_after_approval():
+
+    register_tool(
+        Tool(
+            name="approval_tool",
+            function=echo_tool,
+            description="Approval tool",
+            outputs=["received"],
+        )
+    )
+
+    register_tool(
+        Tool(
+            name="echo_tool",
+            function=echo_tool,
+            description="Echo tool",
+            outputs=["received"],
+        )
+    )
+
+    step1 = PlanStep(
+        id=1,
+        tool="approval_tool",
+        tool_input="Approved input",
+        depends_on=[],
+        output="approval_output",
+        approval=ApprovalRequest(
+            step_id=1,
+            tool="approval_tool",
+            reason="Requires manual approval",
+        ),
+    )
+
+    step2 = PlanStep(
+        id=2,
+        tool="echo_tool",
+        tool_input="#1.received",
+        depends_on=[1],
+        output="final_answer",
+    )
+
+    state = make_state(
+        steps=[step1, step2],
+    )
+
+    result = executor_node(state)
+
+    assert (
+            result["tool_results"][1]["status"]
+            == StepStatus.WAITING_FOR_APPROVAL
+        )
+    state.update(result)
+
+    state["approval_decision"] = (
+        ApprovalDecision.APPROVED
+    )
+
+    result = executor_node(state)
+    print(result["tool_results"][1]["output"])
+    assert (
+        result["tool_results"][1]["status"]
+        == StepStatus.SUCCESS
+    )
+
+    assert (
+        result["tool_results"][2]["status"]
+        == StepStatus.SUCCESS
+    )
+
+def test_resume_after_rejection():
+
+    register_tool(
+        Tool(
+            name="approval_tool",
+            function=echo_tool,
+            description="Approval tool",
+            outputs=["received"],
+        )
+    )
+
+    register_tool(
+        Tool(
+            name="echo_tool",
+            function=echo_tool,
+            description="Echo tool",
+            outputs=["received"],
+        )
+    )
+
+    step1 = PlanStep(
+        id=1,
+        tool="approval_tool",
+        tool_input="Approved input",
+        depends_on=[],
+        output="approval_output",
+        approval=ApprovalRequest(
+            step_id=1,
+            tool="approval_tool",
+            reason="Requires manual approval",
+        ),
+    )
+
+    step2 = PlanStep(
+        id=2,
+        tool="echo_tool",
+        tool_input="#1.received",
+        depends_on=[1],
+        output="final_answer",
+    )
+
+    state = make_state(
+        steps=[step1, step2],
+    )
+
+    result = executor_node(state)
+
+    assert (
+        result["tool_results"][1]["status"]
+        == StepStatus.WAITING_FOR_APPROVAL
+    )
+
+    state.update(result)
+
+    state["approval_decision"] = (
+        ApprovalDecision.REJECTED
+    )
+
+    result = executor_node(state)
+
+    assert (
+        result["tool_results"][1]["status"]
+        == StepStatus.FAILED
+    )
+
+    assert (
+        result["tool_results"][2]["status"]
+        == StepStatus.SKIPPED
+    )
+

@@ -27,6 +27,8 @@ from concurrent.futures import TimeoutError
 from runtime.failure_reason import FailureReason
 from runtime.retry_error import RetryError
 
+from runtime.approval_decision import ApprovalDecision
+
 def execute_step(step, state, tool_results):
 
     tool_name = step.tool
@@ -243,7 +245,9 @@ def executor_node(state):
     approval_request = None
     logger.info("Executor started")
     config = state["runtime_config"]
-
+    approval_decision = state.get(
+        "approval_decision"
+    )
     event_bus = state.setdefault(
         "event_bus",
         EventBus(),
@@ -415,19 +419,55 @@ def executor_node(state):
 
                 if step.approval is not None:
 
-                    approval_request = step.approval
+                    if approval_decision is None:
 
-                    tool_results[step.id] = {
-                        "messages": [],
-                        "output": {},
-                        "success": False,
-                        "status": StepStatus.WAITING_FOR_APPROVAL,
-                        "error": None,
-                    }
+                        approval_request = step.approval
 
-                    pending_steps.remove(step)
+                        tool_results[step.id] = {
+                            "messages": [],
+                            "output": {},
+                            "success": False,
+                            "status": StepStatus.WAITING_FOR_APPROVAL,
+                            "error": None,
+                        }
 
-                    continue
+                        pending_steps.remove(step)
+
+                        continue
+
+                    if approval_decision == ApprovalDecision.REJECTED:
+
+                        tool_results[step.id] = {
+                            "messages": [
+                                AIMessage(
+                                    content="Approval rejected."
+                                )
+                            ],
+                            "output": {},
+                            "success": False,
+                            "status": StepStatus.FAILED,
+                            "error": "Approval rejected.",
+                        }
+
+                        execution_records.append(
+                            ExecutionRecord(
+                                step_id=step.id,
+                                tool=step.tool,
+                                success=False,
+                                retries=0,
+                                start_time=0,
+                                end_time=0,
+                                duration=0,
+                                error="Approval rejected.",
+                            )
+                        )
+
+                        pending_steps.remove(step)
+
+                        continue
+
+                    # APPROVED
+                    # Fall through to normal execution.
 
                 future = executor.submit(
                     execute_step,
