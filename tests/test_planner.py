@@ -10,10 +10,10 @@ from planner import planner_node, MAX_REPAIR_ATTEMPTS
 
 from unittest.mock import patch
 
-from schemas import PlannerOutput, PlanStep
+from schemas import PlannerOutput, PlanStep, ApprovalConfig
 
 from registry import clear_registry
-
+from runtime.approval_request import ApprovalRequest
 
 @pytest.fixture(autouse=True)
 def setup_tools():
@@ -287,4 +287,84 @@ def test_valid_multistep_llm_plan():
 
     assert result["error"] is None
 
+@patch("planner.get_structured_llm")
+def test_planner_creates_approval_request(mock_llm):
+
+    class FakeLLMApproval:
+
+        def invoke(self, prompt):
+
+            return PlannerOutput(
+                steps=[
+                    PlanStep(
+                        id=1,
+                        tool="llm",
+                        tool_input="Hello",
+                        depends_on=[],
+                        approval=ApprovalConfig(
+                            required=True,
+                            reason="Planner requested approval.",
+                        ),
+                    )
+                ]
+            )
+
+    mock_llm.return_value = FakeLLMApproval()
+
+    state = {
+        "messages": [
+            HumanMessage(content="What is RAG?")
+        ]
+    }
+
+    result = planner_node(state)
+
+    step = result["steps"][0]
     
+    assert step.approval is not None
+
+    assert (
+        step.approval.step_id == 1
+    )
+
+    assert (
+        step.approval.tool == "llm"
+    )
+
+    assert (
+        step.approval.reason
+        == "Planner requested approval."
+    )
+
+@patch("planner.get_structured_llm")
+def test_planner_without_approval(mock_llm):
+
+    class FakeLLM:
+
+        def invoke(self, prompt):
+
+            return PlannerOutput(
+                steps=[
+                    PlanStep(
+                        id=1,
+                        tool="llm",
+                        tool_input="Hello",
+                        depends_on=[],
+                        approval=None,
+                    )
+                ]
+            )
+
+    mock_llm.return_value = FakeLLM()
+
+    state = {
+        "messages": [
+            HumanMessage(content="Explain RAG")
+        ]
+    }
+
+    result = planner_node(state)
+
+    step = result["steps"][0]
+
+    assert step.approval is None

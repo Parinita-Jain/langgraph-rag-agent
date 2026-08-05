@@ -1,6 +1,7 @@
 import pytest
 
-from models.plan import PlanStep
+from schemas import PlanStep, ApprovalConfig
+from validator import validate_plan
 from registry import Tool, clear_registry, register_tool
 from validator import validate_plan
 
@@ -44,6 +45,7 @@ def test_valid_plan():
             id=1,
             tool="dummy",
             tool_input="",
+            depends_on=[],
         ),
         PlanStep(
             id=2,
@@ -59,8 +61,18 @@ def test_valid_plan():
 def test_duplicate_step_id():
 
     steps = [
-        PlanStep(1, "dummy", ""),
-        PlanStep(1, "dummy", ""),
+        PlanStep(
+                    id=1,
+                    tool="dummy",
+                    tool_input="",
+                    depends_on=[],
+                ),
+        PlanStep(
+                    id=1,
+                    tool="dummy",
+                    tool_input="",
+                    depends_on=[],
+                ),
     ]
 
     errors = validate_plan(steps)
@@ -71,8 +83,13 @@ def test_duplicate_step_id():
 def test_unknown_tool():
 
     steps = [
-        PlanStep(1, "unknown", ""),
-    ]
+                    PlanStep(
+                id=1,
+                tool="unknown",
+                tool_input="",
+                depends_on=[],
+            ),
+        ]
 
     errors = validate_plan(steps)
 
@@ -124,6 +141,7 @@ def test_future_dependency():
             id=2,
             tool="dummy",
             tool_input="",
+            depends_on=[],
         ),
     ]
 
@@ -135,10 +153,46 @@ def test_future_dependency():
 def test_non_sequential_step_ids():
 
     steps = [
-        PlanStep(1, "dummy", ""),
-        PlanStep(3, "dummy", ""),
+                PlanStep(
+                    id=1,
+                    tool="dummy",
+                    tool_input="",
+                    depends_on=[],
+                ),
+                PlanStep(
+                    id=3,
+                    tool="dummy",
+                    tool_input="",
+                    depends_on=[],
+                ),
     ]
 
     errors = validate_plan(steps)
 
     assert "Expected step id 2, found 3" in errors
+
+from schemas import PlanStep, ApprovalConfig
+from validator import validate_plan
+
+
+def test_validate_plan_requires_approval_reason():
+
+    steps = [
+        PlanStep(
+            id=1,
+            tool="llm",
+            tool_input="Hello",
+            depends_on=[],
+            approval=ApprovalConfig(
+                required=True,
+                reason=None,
+            ),
+        )
+    ]
+
+    errors = validate_plan(steps)
+
+    assert (
+        "Step 1: approval requires a reason."
+        in errors
+    )

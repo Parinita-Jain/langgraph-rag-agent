@@ -1,6 +1,6 @@
 import re
 
-from schemas import PlannerOutput, PlanStep
+
 from validator import validate_plan
 from registry import (list_tools,
                       get_tool_descriptions,)
@@ -8,6 +8,7 @@ from errors import OrionError, ErrorType
 from config import logger
 from planner_llm import get_structured_llm
 from planner_repair import repair_plan
+from runtime.approval_request import ApprovalRequest
 from schemas import (
     PlannerOutput,
     PlanStep as PlannerStep,
@@ -57,7 +58,7 @@ def planner_node(state):
 
         return {
             "steps": [
-                PlanStep(
+                PlannerStep(
                     id=1,
                     tool="direct",
                     tool_input="",
@@ -78,7 +79,7 @@ def planner_node(state):
 
         return {
             "steps": [
-                PlanStep(
+                PlannerStep(
                     id=1,
                     tool="calculator",
                     tool_input=question,
@@ -228,6 +229,18 @@ def planner_node(state):
 
     depends_on=[1]
 
+    6. If a step requires human approval,
+    return:
+
+    approval = {{
+        "required": true,
+        "reason": "Brief explanation of why approval is needed."
+    }}
+
+    Otherwise return:
+
+    approval = null
+
 
     Question:
 
@@ -311,7 +324,19 @@ def planner_node(state):
             depends_on=step.depends_on,
             output=step.output,
             timeout=None,
-            approval=None,
+            approval=(
+            ApprovalRequest(
+                step_id=step.id,
+                tool=step.tool,
+                reason=step.approval.reason
+                    or "Planner requested approval.",
+            )
+            if (
+                step.approval is not None
+                and step.approval.required
+            )
+            else None
+            ),
         )
         for step in result.steps
     ]

@@ -79,5 +79,19 @@ def validate_plan(steps):
 
         expected += 1
 
+    for step in steps:
+    
+            if (
+                step.approval is not None
+                and step.approval.required
+                and (
+                    step.approval.reason is None
+                    or not step.approval.reason.strip()
+                )
+            ):
+                errors.append(
+                    f"Step {step.id}: approval requires a reason."
+                )
+
     return errors
 
