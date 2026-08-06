@@ -24,6 +24,8 @@ class PlanStep(BaseModel):
 
     approval: ApprovalConfig | None = None
 
+    condition: str | None = None
+
 class PlannerOutput(BaseModel):
 
     steps: list[PlanStep]

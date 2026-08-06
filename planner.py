@@ -241,6 +241,65 @@ def planner_node(state):
 
     approval = null
 
+    7. If a step should execute only when a previous step satisfies a condition,
+    return a condition.
+
+        Format:
+
+        condition = "#<step_id>.<field> <operator> <value>"
+
+        Supported operators:
+
+        ==
+        !=
+        >
+        <
+        >=
+        <=
+
+        Examples:
+
+        condition = "#1.answer == \"yes\""
+
+        condition = "#2.value > 10"
+
+        condition = "#3.success == true"
+
+        If the step should always execute,
+        return:
+
+        condition = null
+
+        Example 3
+
+        User:
+
+        Check the customer's account balance.
+        If the balance is greater than ₹10,000,
+        invest in the mutual fund.
+
+        Steps:
+
+        1.
+
+        tool = bank_balance
+
+        tool_input = Customer account
+
+        depends_on = []
+
+        condition = null
+
+        2.
+
+        tool = invest
+
+        tool_input = Invest in mutual fund
+
+        depends_on = [1]
+
+        condition = "#1.balance > 10000"
+
 
     Question:
 
@@ -324,6 +383,7 @@ def planner_node(state):
             depends_on=step.depends_on,
             output=step.output,
             timeout=None,
+            condition=step.condition,
             approval=(
             ApprovalRequest(
                 step_id=step.id,

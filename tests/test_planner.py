@@ -368,3 +368,60 @@ def test_planner_without_approval(mock_llm):
     step = result["steps"][0]
 
     assert step.approval is None
+
+@patch("planner.get_structured_llm")
+def test_planner_supports_branching(mock_llm):
+
+    class FakeLLM:
+
+        def invoke(self, prompt):
+
+            return PlannerOutput(
+                steps=[
+                    PlanStep(
+                        id=1,
+                        tool="llm",
+                        tool_input="Check eligibility",
+                        depends_on=[],
+                    ),
+                    PlanStep(
+                        id=2,
+                        tool="llm",
+                        tool_input="Approve loan",
+                        depends_on=[1],
+                        condition="#1.answer == 'yes'",
+                    ),
+                    PlanStep(
+                        id=3,
+                        tool="llm",
+                        tool_input="Reject loan",
+                        depends_on=[1],
+                        condition="#1.answer != 'yes'",
+                    ),
+                ]
+            )
+
+    mock_llm.return_value = FakeLLM()
+
+    state = {
+        "messages": [
+            HumanMessage(
+                content=(
+                    "If eligible approve the loan "
+                    "otherwise reject it."
+                )
+            )
+        ]
+    }
+
+    result = planner_node(state)
+
+    assert (
+        result["steps"][1].condition
+        == "#1.answer == 'yes'"
+    )
+
+    assert (
+        result["steps"][2].condition
+        == "#1.answer != 'yes'"
+    )

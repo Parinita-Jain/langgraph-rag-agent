@@ -16,7 +16,9 @@ class PlanStep:
     timeout: float | None = None
     approval: ApprovalRequest | None = None
 
+    condition: str | None = None
 
+    
 @dataclass
 class Plan:
     """
