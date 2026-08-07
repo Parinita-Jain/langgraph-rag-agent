@@ -1234,3 +1234,155 @@ def test_resume_after_rejection():
         == StepStatus.SKIPPED
     )
 
+def yes_tool(state):
+
+    return {
+        "messages": [],
+        "output": {
+            "answer": "eligible",
+        },
+        "success": True,
+        "error": None,
+    }
+
+
+def test_executor_branch_yes_path():
+
+    register_tool(
+        Tool(
+            name="check",
+            function=yes_tool,
+            description="Check",
+            outputs=["answer"],
+        )
+    )
+
+    register_tool(
+        Tool(
+            name="dummy",
+            function=echo_tool,
+            description="Dummy",
+            outputs=["answer"],
+        )
+    )
+
+    step1 = PlanStep(
+        id=1,
+        tool="check",
+        tool_input="Check",
+        depends_on=[],
+    )
+
+    step2 = PlanStep(
+        id=2,
+        tool="dummy",
+        tool_input="Approve",
+        depends_on=[1],
+        condition="#1.answer == 'eligible'",
+    )
+
+    step3 = PlanStep(
+        id=3,
+        tool="dummy",
+        tool_input="Reject",
+        depends_on=[1],
+        condition="#1.answer != 'eligible'",
+    )
+
+    state = make_state(
+        steps=[step1, step2, step3]
+    )
+
+    result = executor_node(state)
+
+    assert (
+        result["tool_results"][1]["status"]
+        == StepStatus.SUCCESS
+    )
+
+    assert (
+        result["tool_results"][2]["status"]
+        == StepStatus.SUCCESS
+    )
+
+    assert (
+        result["tool_results"][3]["status"]
+        == StepStatus.SKIPPED
+    )
+
+def no_tool(state):
+
+    return {
+        "messages": [],
+        "output": {
+            "answer": "not eligible",
+        },
+        "success": True,
+        "error": None,
+    }
+
+
+def test_executor_branch_no_path():
+
+    register_tool(
+        Tool(
+            name="check",
+            function=no_tool,
+            description="Check",
+            outputs=["answer"],
+        )
+    )
+
+    register_tool(
+        Tool(
+            name="dummy",
+            function=echo_tool,
+            description="Dummy",
+            outputs=["answer"],
+        )
+    )
+
+    step1 = PlanStep(
+        id=1,
+        tool="check",
+        tool_input="Check",
+        depends_on=[],
+    )
+
+    step2 = PlanStep(
+        id=2,
+        tool="dummy",
+        tool_input="Approve",
+        depends_on=[1],
+        condition="#1.answer == 'eligible'",
+    )
+
+    step3 = PlanStep(
+        id=3,
+        tool="dummy",
+        tool_input="Reject",
+        depends_on=[1],
+        condition="#1.answer != 'eligible'",
+    )
+
+    state = make_state(
+        steps=[step1, step2, step3]
+    )
+
+    result = executor_node(state)
+
+    assert (
+        result["tool_results"][1]["status"]
+        == StepStatus.SUCCESS
+    )
+
+    assert (
+        result["tool_results"][2]["status"]
+        == StepStatus.SKIPPED
+    )
+
+    assert (
+        result["tool_results"][3]["status"]
+        == StepStatus.SUCCESS
+    )
+

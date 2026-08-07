@@ -29,6 +29,8 @@ from runtime.retry_error import RetryError
 
 from runtime.approval_decision import ApprovalDecision
 
+from condition import evaluate_condition
+
 def execute_step(step, state, tool_results):
 
     tool_name = step.tool
@@ -468,6 +470,48 @@ def executor_node(state):
 
                     # APPROVED
                     # Fall through to normal execution.
+
+                if (
+                    step.condition is not None
+                    and not evaluate_condition(
+                        step.condition,
+                        tool_results,
+                    )
+                ):
+
+                    tool_results[step.id] = {
+                        "messages": [
+                            AIMessage(
+                                content="Condition evaluated to false."
+                            )
+                        ],
+                        "output": {},
+                        "success": True,
+                        "status": StepStatus.SKIPPED,
+                        "error": None,
+                    }
+
+                    execution_records.append(
+                        ExecutionRecord(
+                            step_id=step.id,
+                            tool=step.tool,
+                            success=True,
+                            retries=0,
+                            start_time=0,
+                            end_time=0,
+                            duration=0,
+                            error=None,
+                        )
+                    )
+
+                    pending_steps.remove(step)
+
+                    logger.info(
+                        "Skipped step %d because condition was false.",
+                        step.id,
+                    )
+
+                    continue
 
                 future = executor.submit(
                     execute_step,

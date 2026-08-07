@@ -300,6 +300,55 @@ def planner_node(state):
 
         condition = "#1.balance > 10000"
 
+    8. When the user's request contains alternatives such as:
+
+        - if ... otherwise ...
+        - if ... else ...
+        - when ... otherwise ...
+        - based on the result ...
+
+        generate separate workflow steps.
+
+        Each branch should:
+
+        - depend on the same previous step
+        - have its own condition
+        - use mutually exclusive conditions whenever appropriate
+
+        Example
+
+        User:
+
+        If the customer is eligible,
+        approve the loan.
+        Otherwise reject it.
+
+        Steps
+
+        1.
+
+        tool = eligibility_check
+
+        depends_on = []
+
+        condition = null
+
+        2.
+
+        tool = approve_loan
+
+        depends_on = [1]
+
+        condition = "#1.eligible == true"
+
+        3.
+
+        tool = reject_loan
+
+        depends_on = [1]
+
+        condition = "#1.eligible == false"
+
 
     Question:
 

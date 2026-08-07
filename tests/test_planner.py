@@ -425,3 +425,65 @@ def test_planner_supports_branching(mock_llm):
         result["steps"][2].condition
         == "#1.answer != 'yes'"
     )
+
+@patch("planner.get_structured_llm")
+def test_planner_generates_mutually_exclusive_branches(mock_llm):
+
+    class FakeLLM:
+
+        def invoke(self, prompt):
+
+            return PlannerOutput(
+                steps=[
+                    PlanStep(
+                        id=1,
+                        tool="llm",
+                        tool_input="Check loan eligibility",
+                        depends_on=[],
+                    ),
+                    PlanStep(
+                        id=2,
+                        tool="llm",
+                        tool_input="Approve loan",
+                        depends_on=[1],
+                        condition="#1.answer == 'eligible'",
+                    ),
+                    PlanStep(
+                        id=3,
+                        tool="llm",
+                        tool_input="Reject loan",
+                        depends_on=[1],
+                        condition="#1.answer != 'eligible'",
+                    ),
+                ]
+            )
+
+    mock_llm.return_value = FakeLLM()
+
+    state = {
+        "messages": [
+            HumanMessage(
+                content=(
+                    "If the customer is eligible, "
+                    "approve the loan, otherwise reject it."
+                )
+            )
+        ]
+    }
+
+    result = planner_node(state)
+
+    assert len(result["steps"]) == 3
+
+    assert result["steps"][1].depends_on == [1]
+    assert result["steps"][2].depends_on == [1]
+
+    assert (
+        result["steps"][1].condition
+        == "#1.answer == 'eligible'"
+    )
+
+    assert (
+        result["steps"][2].condition
+        == "#1.answer != 'eligible'"
+    )

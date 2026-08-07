@@ -78,6 +78,10 @@ def repair_plan(question, previous_plan, errors):
     7. Preserve existing step IDs whenever possible.
 
     8. Preserve output variables unless they must change.
+
+    9. Preserve existing conditions whenever they are valid.
+
+       Do not remove or rewrite conditions unless required to fix a validation error.
     """
 
     structured_llm = get_structured_llm()
